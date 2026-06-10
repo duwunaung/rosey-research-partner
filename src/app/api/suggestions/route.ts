@@ -22,8 +22,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { baseUrl, apiKey, model } = config
+    const cleanBaseUrl = baseUrl?.trim() || ''
+    const cleanApiKey = apiKey?.trim() || ''
+    const cleanModel = model?.trim() || ''
 
-    if (!baseUrl || !model) {
+    if (!cleanBaseUrl || !cleanModel) {
       return NextResponse.json({ error: 'Missing LLM Base URL or Model configuration' }, { status: 400 })
     }
 
@@ -52,7 +55,7 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
       { role: 'user', content: userPrompt }
     ]
 
-    let formattedBaseUrl = baseUrl.replace(/\/$/, '')
+    let formattedBaseUrl = cleanBaseUrl.replace(/\/$/, '')
     const isOllamaNative = formattedBaseUrl.endsWith('/api') || formattedBaseUrl.includes('ollama.com')
     
     let llmUrl = ''
@@ -62,7 +65,7 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
       const baseEndpoint = formattedBaseUrl.endsWith('/api') ? formattedBaseUrl : `${formattedBaseUrl}/api`
       llmUrl = `${baseEndpoint}/chat`
       requestBody = {
-        model: model,
+        model: cleanModel,
         messages: messages,
         stream: false,
         format: 'json',
@@ -73,7 +76,7 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
       }
       llmUrl = `${formattedBaseUrl}/chat/completions`
       requestBody = {
-        model: model,
+        model: cleanModel,
         messages: messages,
         response_format: { type: 'json_object' },
         temperature: 0.7,
@@ -83,8 +86,8 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
     const llmHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     }
-    if (apiKey) {
-      llmHeaders['Authorization'] = `Bearer ${apiKey}`
+    if (cleanApiKey) {
+      llmHeaders['Authorization'] = `Bearer ${cleanApiKey}`
     }
 
     const llmResponse = await fetch(llmUrl, {
