@@ -58,6 +58,7 @@ export default function DashboardPage() {
   const [addingUrl, setAddingUrl] = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   // Inputs
   const [newTopicName, setNewTopicName] = useState('')
@@ -82,6 +83,7 @@ export default function DashboardPage() {
 
   // Initialize Config & Fetch data
   useEffect(() => {
+    setMounted(true)
     // Load config from localStorage
     const savedBaseUrl = localStorage.getItem('rosey_baseUrl')
     const savedApiKey = localStorage.getItem('rosey_apiKey')
@@ -987,7 +989,7 @@ export default function DashboardPage() {
               </p>
             )}
             <div style={{ fontSize: '10px', color: '#64748b', marginTop: '10px', fontFamily: 'monospace' }}>
-              DATE COMPLED: {new Date().toLocaleDateString()} | RESEARCHER ID: USER_SECURE_ROW
+              DATE COMPLED: {mounted ? new Date().toLocaleDateString() : ''} | RESEARCHER ID: USER_SECURE_ROW
             </div>
           </div>
 
