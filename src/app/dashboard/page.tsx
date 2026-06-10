@@ -630,7 +630,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-black text-[#f4f4f5]">
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto lg:overflow-hidden bg-black text-[#f4f4f5]">
       {/* Background cyber grid */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
 
@@ -668,7 +668,7 @@ export default function DashboardPage() {
       </nav>
 
       {/* Main Grid Layout */}
-      <div className="flex-1 w-full max-w-[1700px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6 z-10 overflow-hidden">
+      <div className="flex-1 w-full max-w-[1700px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6 z-10 lg:overflow-hidden overflow-visible">
         
         {/* ================= COLUMN 1: TOPIC DIRECTORY ================= */}
         <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden">
