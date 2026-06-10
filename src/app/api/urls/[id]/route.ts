@@ -44,3 +44,47 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete URL' }, { status: 500 })
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getAuthenticatedUser(request)
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+
+  try {
+    const { notes, revisit } = await request.json()
+
+    // Ensure the URL belongs to a topic owned by the user
+    const urlItem = await db.watchedUrl.findFirst({
+      where: {
+        id,
+        topic: {
+          userId: user.userId,
+        },
+      },
+    })
+
+    if (!urlItem) {
+      return NextResponse.json({ error: 'URL item not found or access denied' }, { status: 404 })
+    }
+
+    const updatedData: any = {}
+    if (notes !== undefined) updatedData.notes = notes
+    if (revisit !== undefined) updatedData.revisit = revisit
+
+    const updatedUrl = await db.watchedUrl.update({
+      where: { id },
+      data: updatedData,
+    })
+
+    return NextResponse.json(updatedUrl)
+  } catch (error) {
+    console.error('Update URL error:', error)
+    return NextResponse.json({ error: 'Failed to update URL' }, { status: 500 })
+  }
+}

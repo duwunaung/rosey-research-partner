@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   Shield, Plus, Trash2, Globe, Settings, LogOut, Loader, Sparkles, 
   Play, Terminal, FileText, ChevronRight, CheckCircle2, XCircle, 
-  Clock, AlertCircle, RefreshCw, Layers, Brain
+  Clock, AlertCircle, RefreshCw, Layers, Brain, Bookmark
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
@@ -29,6 +29,9 @@ interface WatchedUrl {
   score: number | null
   justification: string | null
   status: string // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
+  publishedDate: string | null
+  notes: string | null
+  revisit: boolean
   topicId: string
   createdAt: string
 }
@@ -36,6 +39,58 @@ interface WatchedUrl {
 interface Suggestion {
   name: string
   url: string
+}
+
+interface ProviderPreset {
+  name: string
+  baseUrl: string
+  model: string
+  placeholderKey: string
+  keyLabel: string
+  helpText: string
+}
+
+const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
+  ollama_local: {
+    name: 'Ollama (Localhost)',
+    baseUrl: 'http://localhost:11434',
+    model: 'llama3.1',
+    placeholderKey: 'No API key needed',
+    keyLabel: 'API Key (Optional)',
+    helpText: 'Ensure your local Ollama server is running (ollama run llama3.1).'
+  },
+  ollama_cloud: {
+    name: 'Ollama Cloud',
+    baseUrl: 'https://ollama.com',
+    model: 'gemma3:27b-cloud',
+    placeholderKey: 'Enter Ollama Cloud Key',
+    keyLabel: 'Ollama API Key',
+    helpText: 'Use your API key from ollama.com/settings/keys.'
+  },
+  groq: {
+    name: 'Groq Cloud',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+    placeholderKey: 'gsk_...',
+    keyLabel: 'Groq API Key',
+    helpText: 'Use your API key from console.groq.com.'
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'meta-llama/llama-3.3-70b-instruct',
+    placeholderKey: 'sk-or-...',
+    keyLabel: 'OpenRouter API Key',
+    helpText: 'Use your API key from openrouter.ai.'
+  },
+  custom: {
+    name: 'Custom (OpenAI-Compatible)',
+    baseUrl: '',
+    model: '',
+    placeholderKey: 'API key if required',
+    keyLabel: 'API Key',
+    helpText: 'Enter any custom OpenAI-compatible endpoint URL and model.'
+  }
 }
 
 export default function DashboardPage() {
@@ -71,7 +126,8 @@ export default function DashboardPage() {
 
   // LLM Config State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1')
+  const [provider, setProvider] = useState('ollama_local')
+  const [baseUrl, setBaseUrl] = useState('http://localhost:11434')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('llama3.1')
 
@@ -80,20 +136,38 @@ export default function DashboardPage() {
   const [activeUrlId, setActiveUrlId] = useState<string | null>(null)
   const [terminalLogs, setTerminalLogs] = useState<string[]>([])
   const [selectedUrlDetails, setSelectedUrlDetails] = useState<WatchedUrl | null>(null)
+  const [timeHorizon, setTimeHorizon] = useState('month')
+  const [sortBy, setSortBy] = useState<'score' | 'date'>('score')
+  const [filterBy, setFilterBy] = useState<'all' | 'revisit'>('all')
+  const [customNotes, setCustomNotes] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
   // Initialize Config & Fetch data
   useEffect(() => {
     setMounted(true)
-    // Load config from localStorage
-    const savedBaseUrl = localStorage.getItem('rosey_baseUrl')
-    const savedApiKey = localStorage.getItem('rosey_apiKey')
-    const savedModel = localStorage.getItem('rosey_model')
+    // Load config from localStorage (with fallback to legacy rosey_ prefix)
+    const savedProvider = localStorage.getItem('nexus_provider') || localStorage.getItem('rosey_provider') || 'ollama_local'
+    const savedBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl')
+    const savedApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey')
+    const savedModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model')
     
-    if (savedBaseUrl) setBaseUrl(savedBaseUrl)
+    setProvider(savedProvider)
+    if (savedBaseUrl) {
+      setBaseUrl(savedBaseUrl)
+    } else {
+      setBaseUrl(PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
+    }
+    
     if (savedApiKey) setApiKey(savedApiKey)
-    if (savedModel) setModel(savedModel)
+    
+    if (savedModel) {
+      setModel(savedModel)
+    } else {
+      setModel(PROVIDER_PRESETS[savedProvider]?.model || '')
+    }
 
     // Load username from session (or fallback to fetch topics)
     fetchTopics()
@@ -105,11 +179,12 @@ export default function DashboardPage() {
   }, [terminalLogs])
 
   const saveConfig = () => {
-    localStorage.setItem('rosey_baseUrl', baseUrl)
-    localStorage.setItem('rosey_apiKey', apiKey)
-    localStorage.setItem('rosey_model', model)
+    localStorage.setItem('nexus_provider', provider)
+    localStorage.setItem('nexus_baseUrl', baseUrl)
+    localStorage.setItem('nexus_apiKey', apiKey)
+    localStorage.setItem('nexus_model', model)
     setIsSettingsOpen(false)
-    addLog(`[SYSTEM] LLM settings saved: ${model} at ${baseUrl}`)
+    addLog(`[SYSTEM] LLM settings saved: [${PROVIDER_PRESETS[provider]?.name || provider}] ${model} at ${baseUrl}`)
   }
 
   const handleTestConnection = async () => {
@@ -172,8 +247,35 @@ export default function DashboardPage() {
     }
   }
 
+  // Sort and filter URLs in-memory
+  const displayedUrls = [...urls]
+    .filter(u => {
+      if (filterBy === 'revisit') return u.revisit === true
+      return true
+    })
+    .sort((a, b) => {
+      if (sortBy === 'score') {
+        if (a.status === 'COMPLETED' && b.status === 'COMPLETED') {
+          return (b.score || 0) - (a.score || 0)
+        }
+        if (a.status === 'COMPLETED') return -1
+        if (b.status === 'COMPLETED') return 1
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      } else {
+        // Sort by published date descending, fallback to createdAt
+        const dateA = a.publishedDate ? new Date(a.publishedDate).getTime() : 0
+        const dateB = b.publishedDate ? new Date(b.publishedDate).getTime() : 0
+        if (dateA !== dateB) return dateB - dateA
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+    })
+
   const fetchUrls = async (topicId: string) => {
     setLoadingUrls(true)
+    // Load last sync time
+    const savedSync = localStorage.getItem(`nexus_last_sync_${topicId}`)
+    setLastSyncTime(savedSync || null)
+
     try {
       const res = await fetch(`/api/urls?topicId=${topicId}`)
       if (!res.ok) throw new Error('Failed to fetch URLs')
@@ -189,6 +291,21 @@ export default function DashboardPage() {
       })
       setUrls(sorted)
       setSuggestions([]) // Clear suggestions on topic switch
+
+      // Auto-sync: if there are any PENDING items and we are not currently researching
+      const pendingItems = sorted.filter((u: WatchedUrl) => u.status === 'PENDING')
+      if (pendingItems.length > 0 && !researching) {
+        // Read LLM config directly from localStorage to prevent React state batching race conditions on initial mount
+        const currentProvider = localStorage.getItem('nexus_provider') || localStorage.getItem('rosey_provider') || 'ollama_local'
+        const currentBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl') || PROVIDER_PRESETS[currentProvider]?.baseUrl || ''
+        const currentApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey') || ''
+        const currentModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model') || PROVIDER_PRESETS[currentProvider]?.model || ''
+
+        if (currentBaseUrl && currentModel) {
+          addLog(`[SYSTEM] Detected ${pendingItems.length} pending target(s). Auto-triggering research sync...`)
+          runPipeline(pendingItems, currentBaseUrl, currentApiKey, currentModel)
+        }
+      }
     } catch (err: any) {
       console.error(err)
       addLog(`[ERROR] Failed to fetch watched URLs.`)
@@ -289,6 +406,52 @@ export default function DashboardPage() {
     }
   }
 
+  const handleToggleRevisit = async () => {
+    if (!selectedUrlDetails) return
+    const newRevisit = !selectedUrlDetails.revisit
+
+    try {
+      const res = await fetch(`/api/urls/${selectedUrlDetails.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revisit: newRevisit })
+      })
+
+      if (!res.ok) throw new Error('Failed to update bookmark')
+      const updated = await res.json()
+
+      setUrls(prev => prev.map(u => u.id === selectedUrlDetails.id ? updated : u))
+      setSelectedUrlDetails(updated)
+      addLog(`[SYSTEM] Bookmark toggled: ${updated.revisit ? 'MARKED FOR REVISIT' : 'REMOVED FROM REVISIT'}`)
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!selectedUrlDetails) return
+    setSavingNotes(true)
+
+    try {
+      const res = await fetch(`/api/urls/${selectedUrlDetails.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: customNotes })
+      })
+
+      if (!res.ok) throw new Error('Failed to save notes')
+      const updated = await res.json()
+
+      setUrls(prev => prev.map(u => u.id === selectedUrlDetails.id ? updated : u))
+      setSelectedUrlDetails(updated)
+      addLog(`[SYSTEM] Researcher notes updated successfully.`)
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
   const handleSuggestSources = async () => {
     if (!selectedTopic) return
     setLoadingSuggestions(true)
@@ -338,11 +501,15 @@ export default function DashboardPage() {
     }
   }
 
-  const runPipeline = async (urlItems: WatchedUrl[]) => {
+  const runPipeline = async (urlItems: WatchedUrl[], customBaseUrl?: string, customApiKey?: string, customModel?: string) => {
     setResearching(true)
     setTerminalLogs([])
+    const activeBaseUrl = customBaseUrl || baseUrl
+    const activeApiKey = customApiKey || apiKey
+    const activeModel = customModel || model
+
     addLog(`[SYSTEM: BOOT] Starting cybernetic ingestion engine...`)
-    addLog(`[SYSTEM: CONFIG] LLM: ${model} | Scraper: Jina Reader API`)
+    addLog(`[SYSTEM: CONFIG] LLM: ${activeModel} | Scraper: Jina Reader API`)
 
     for (let i = 0; i < urlItems.length; i++) {
       const item = urlItems[i]
@@ -359,7 +526,7 @@ export default function DashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             urlId: item.id,
-            config: { baseUrl, apiKey, model }
+            config: { baseUrl: activeBaseUrl, apiKey: activeApiKey, model: activeModel }
           })
         })
 
@@ -371,13 +538,14 @@ export default function DashboardPage() {
 
         // Update local state with the completed results
         setUrls(prev => prev.map(u => u.id === item.id ? data : u))
-        addLog(`[ROBOT: THINK] Sending markdown to Ollama Cloud model: ${model}`)
+        addLog(`[ROBOT: THINK] Sent markdown to ${PROVIDER_PRESETS[provider]?.name || 'LLM'} model: ${activeModel}`)
         addLog(`[ROBOT: INDEXED] Relevance Score: ${data.score}/10 | Title: ${data.title}`)
         addLog(`[ROBOT: INDEXED] Justification: "${data.justification}"`)
 
         // If this URL is currently opened in the details panel, update it
         if (selectedUrlDetails?.id === item.id) {
           setSelectedUrlDetails(data)
+          setCustomNotes(data.notes || '')
         }
       } catch (err: any) {
         console.error(err)
@@ -390,8 +558,12 @@ export default function DashboardPage() {
     setResearching(false)
     addLog(`[SYSTEM: SUCCESS] Ingestion engine cycle completed.`)
     
-    // Refresh and auto-sort URLs by score
-    if (selectedTopic) fetchUrls(selectedTopic.id)
+    // Refresh and update sync time
+    if (selectedTopic) {
+      const syncTime = new Date().toLocaleString()
+      localStorage.setItem(`nexus_last_sync_${selectedTopic.id}`, syncTime)
+      fetchUrls(selectedTopic.id)
+    }
   }
 
   const handleLogout = async () => {
@@ -473,7 +645,7 @@ export default function DashboardPage() {
             <Shield className="w-5 h-5 text-cyber-cyan" />
           </div>
           <span className="font-bold font-mono tracking-wider text-sm uppercase bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-            Rosey Partner
+            Nexus Partner
           </span>
         </div>
 
@@ -591,9 +763,16 @@ export default function DashboardPage() {
           {/* Active Topic Header / Controls */}
           <div className="glass-panel rounded-2xl p-4 bg-cyber-dark/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <div>
-              <h2 className="text-lg font-bold text-white tracking-wide">
-                {selectedTopic ? selectedTopic.name : 'No Workspace Selected'}
-              </h2>
+              <div className="flex items-center flex-wrap gap-2.5">
+                <h2 className="text-lg font-bold text-white tracking-wide">
+                  {selectedTopic ? selectedTopic.name : 'No Workspace Selected'}
+                </h2>
+                {selectedTopic && (
+                  <span className="text-[10px] font-mono bg-[#0f0f15] border border-white/10 text-slate-400 px-2 py-0.5 rounded-full">
+                    {lastSyncTime ? `Last Synced: ${lastSyncTime}` : 'Never Synced'}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400 font-sans truncate max-w-sm mt-0.5">
                 {selectedTopic?.description || 'Select or create a workspace topic to launch.'}
               </p>
@@ -651,15 +830,67 @@ export default function DashboardPage() {
                 Watched Resources ({urls.length})
               </span>
               {selectedTopic && (
-                <button
-                  disabled={loadingSuggestions || researching}
-                  onClick={handleSuggestSources}
-                  className="text-[10px] font-mono text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={timeHorizon}
+                    onChange={(e) => setTimeHorizon(e.target.value)}
+                    className="bg-cyber-dark/45 text-[10px] font-mono text-slate-400 border border-white/5 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer hover:border-white/10"
+                    title="Search Horizon for AI recommendations"
+                  >
+                    <option value="month" className="bg-[#0f0f15]">Recent (1 Mo)</option>
+                    <option value="year" className="bg-[#0f0f15]">Deep (1 Yr)</option>
+                    <option value="all" className="bg-[#0f0f15]">Archive (All-Time)</option>
+                  </select>
+                  <button
+                    disabled={loadingSuggestions || researching}
+                    onClick={handleSuggestSources}
+                    className="text-[10px] font-mono text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
+                  </button>
+                </div>
               )}
             </div>
+
+            {selectedTopic && urls.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mb-3.5 text-[11px] font-mono border-b border-white/5 pb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 uppercase">Filter:</span>
+                  <button
+                    onClick={() => setFilterBy('all')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                      filterBy === 'all' 
+                        ? 'bg-cyber-indigo/25 text-cyber-indigo border border-cyber-indigo/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setFilterBy('revisit')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                      filterBy === 'revisit' 
+                        ? 'bg-cyber-cyan/25 text-cyber-cyan border border-cyber-cyan/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Revisit Later
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-slate-500 uppercase">Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as 'score' | 'date')}
+                    className="bg-cyber-dark/45 text-slate-300 border border-white/10 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                  >
+                    <option value="score" className="bg-[#0f0f15]">Relevance Score</option>
+                    <option value="date" className="bg-[#0f0f15]">Published Date</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* AI Source Recommendations panel */}
             {suggestions.length > 0 && (
@@ -704,7 +935,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                {urls.map((u) => {
+                {displayedUrls.map((u) => {
                   const isActive = activeUrlId === u.id
                   const isSelected = selectedUrlDetails?.id === u.id
                   
@@ -714,6 +945,7 @@ export default function DashboardPage() {
                       onClick={() => {
                         if (u.status === 'COMPLETED') {
                           setSelectedUrlDetails(u)
+                          setCustomNotes(u.notes || '')
                         }
                       }}
                       className={`group relative p-3.5 rounded-xl border flex items-center justify-between transition cursor-pointer ${
@@ -763,9 +995,19 @@ export default function DashboardPage() {
                           )}
                         </div>
                         
-                        <p className="text-[10px] text-slate-400 font-mono truncate max-w-sm mt-0.5">
-                          {u.url}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] font-mono text-slate-400">
+                          <span className="truncate max-w-xs">{u.url}</span>
+                          {u.publishedDate && (
+                            <span className="text-[9px] text-slate-500 bg-white/5 border border-white/5 px-1 py-0.2 rounded font-sans shrink-0">
+                              Pub: {u.publishedDate}
+                            </span>
+                          )}
+                          {u.revisit && (
+                            <span className="text-[9px] text-cyber-cyan bg-cyber-cyan/5 border border-cyber-cyan/25 px-1 py-0.2 rounded font-sans shrink-0 flex items-center gap-0.5">
+                              <Bookmark className="w-2 h-2 fill-cyber-cyan" /> Revisit
+                            </span>
+                          )}
+                        </div>
                         
                         {u.status === 'COMPLETED' && u.justification && (
                           <p className="text-[11px] text-slate-400 font-sans italic truncate max-w-md mt-1.5">
@@ -810,13 +1052,29 @@ export default function DashboardPage() {
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 {/* Score badge & Title */}
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-                      Score: {selectedUrlDetails.score}/10
-                    </span>
-                    <span className="text-[9px] font-mono text-slate-500">
-                      {new Date(selectedUrlDetails.createdAt).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
+                        Score: {selectedUrlDetails.score}/10
+                      </span>
+                      {selectedUrlDetails.publishedDate && (
+                        <span className="text-[10px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded font-sans shrink-0">
+                          Pub: {selectedUrlDetails.publishedDate}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={handleToggleRevisit}
+                      className={`p-1.5 rounded-lg border transition flex items-center justify-center cursor-pointer ${
+                        selectedUrlDetails.revisit 
+                          ? 'bg-cyber-cyan/15 border-cyber-cyan/45 text-cyber-cyan shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                          : 'bg-white/3 border-white/5 text-slate-400 hover:text-white hover:bg-white/8'
+                      }`}
+                      title={selectedUrlDetails.revisit ? "Remove from Revisit List" : "Mark to Revisit Later"}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${selectedUrlDetails.revisit ? 'fill-cyber-cyan' : ''}`} />
+                    </button>
                   </div>
                   <h3 className="text-base font-bold text-white leading-snug">{selectedUrlDetails.title}</h3>
                   <a
@@ -858,6 +1116,26 @@ export default function DashboardPage() {
                     ))}
                   </ul>
                 </div>
+
+                {/* Custom Notes Section */}
+                <div className="pt-3 border-t border-white/5 space-y-2">
+                  <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400">Researcher Notes</h4>
+                  <textarea
+                    value={customNotes}
+                    onChange={(e) => setCustomNotes(e.target.value)}
+                    placeholder="Annotate key insights, research tasks, or actions to revisit later..."
+                    className="w-full h-24 p-2.5 rounded-xl border border-white/10 bg-cyber-dark/30 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyber-indigo/80 resize-none font-sans"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSaveNotes}
+                      disabled={savingNotes}
+                      className="px-3 py-1.5 rounded-lg border border-cyber-indigo/30 bg-cyber-indigo/10 hover:bg-cyber-indigo/20 text-cyber-indigo text-[10px] font-mono uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingNotes ? 'Saving...' : 'Save Notes'}
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500">
@@ -872,6 +1150,16 @@ export default function DashboardPage() {
         </div>
 
       </div>
+
+      {/* Footer */}
+      <footer className="w-full max-w-[1700px] mx-auto px-6 py-4 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 z-10 text-xs text-slate-500 font-mono">
+        <span>&copy; 2026 Nexus Research Partner. All rights reserved.</span>
+        <div className="flex gap-4">
+          <span>Nexus Research Partner v1.0.1</span>
+          <span>&middot;</span>
+          <span>MIT License</span>
+        </div>
+      </footer>
 
       {/* ================= SETTINGS SIDEBAR ================= */}
       {isSettingsOpen && (
@@ -893,7 +1181,29 @@ export default function DashboardPage() {
 
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">Ollama Cloud Base URL</label>
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">API Provider</label>
+                  <select
+                    value={provider}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setProvider(val)
+                      if (val !== 'custom') {
+                        setBaseUrl(PROVIDER_PRESETS[val].baseUrl)
+                        setModel(PROVIDER_PRESETS[val].model)
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 glass-input text-sm bg-cyber-dark text-slate-200 border border-white/10 rounded-lg focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                  >
+                    {Object.entries(PROVIDER_PRESETS).map(([key, p]) => (
+                      <option key={key} value={key} className="bg-[#0f0f15] text-slate-200">
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">LLM Base URL</label>
                   <input
                     type="url"
                     value={baseUrl}
@@ -902,17 +1212,19 @@ export default function DashboardPage() {
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Ensure it ends with "/v1" if utilizing an OpenAI-compatible cloud provider.
+                    Endpoint URL for LLM requests.
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">API Passphrase / Key</label>
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">
+                    {PROVIDER_PRESETS[provider]?.keyLabel || 'API Key'}
+                  </label>
                   <input
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="gho_... or sk_..."
+                    placeholder={PROVIDER_PRESETS[provider]?.placeholderKey || 'Enter API Key'}
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
@@ -930,7 +1242,7 @@ export default function DashboardPage() {
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Verify the model is deployed on your Ollama Cloud instance.
+                    {PROVIDER_PRESETS[provider]?.helpText || 'Verify the model is deployed on the instance.'}
                   </p>
                 </div>
               </div>
@@ -1032,7 +1344,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div style={{ borderBottom: '2px solid rgba(99,102,241,0.5)', paddingBottom: '20px', marginBottom: '25px' }}>
             <div style={{ float: 'right', fontSize: '12px', fontFamily: 'monospace', color: '#06b6d4' }}>
-              ROSEY DIGEST ENGINE v1.0
+              NEXUS DIGEST ENGINE v1.0.1
             </div>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', letterSpacing: '0.05em', color: '#fff' }}>
               RESEARCH SYNTHESIS DIGEST
@@ -1148,7 +1460,7 @@ export default function DashboardPage() {
 
           {/* Footer signature */}
           <div style={{ marginTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px', textAlign: 'center', fontSize: '10px', fontFamily: 'monospace', color: '#64748b' }}>
-            Report generated by Rosey Research Partner. System signatures verified.
+            Report generated by Nexus Research Partner. System signatures verified.
           </div>
         </div>
       </div>

@@ -22,7 +22,7 @@ export default async function LandingPage() {
           <div className="p-2 rounded-xl glass-panel border-cyber-indigo/30 bg-cyber-dark/40">
             <Shield className="w-5 h-5 text-cyber-cyan" />
           </div>
-          <span className="font-bold font-mono tracking-wider text-sm uppercase">Rosey Partner</span>
+          <span className="font-bold font-mono tracking-wider text-sm uppercase">Nexus Partner</span>
         </div>
         <Link 
           href="https://github.com/duwunaung/rosey-research-partner"
@@ -41,7 +41,7 @@ export default async function LandingPage() {
         {/* Breathing system status label */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-panel border-cyber-cyan/30 bg-cyber-cyan/5 text-xs text-cyber-cyan mb-6 font-mono tracking-wider">
           <Activity className="w-3.5 h-3.5 animate-pulse" />
-          SYSTEM OPERATIONAL: OLLAMA CLOUD CONNECTED
+          SYSTEM OPERATIONAL: RESEARCH CORES ACTIVE
         </div>
 
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight bg-gradient-to-b from-white via-slate-200 to-slate-500 bg-clip-text text-transparent mb-6 max-w-4xl leading-tight">
@@ -129,11 +129,11 @@ export default async function LandingPage() {
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto px-6 py-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 z-10 text-xs text-slate-500 font-mono">
-        <span>&copy; 2026 Rosey Research Partner. All rights reserved.</span>
+        <span>&copy; 2026 Nexus Research Partner. All rights reserved.</span>
         <div className="flex gap-4">
-          <span>Ollama Cloud v1.0</span>
+          <span>Nexus Research Partner v1.0.1</span>
           <span>&middot;</span>
-          <span>Tailwind v4.0</span>
+          <span>MIT License</span>
         </div>
       </footer>
     </main>

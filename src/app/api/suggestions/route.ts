@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { topicId, config } = await request.json()
+    const { topicId, config, timeHorizon } = await request.json()
 
     if (!topicId || !config) {
       return NextResponse.json({ error: 'Missing Topic ID or configuration' }, { status: 400 })
@@ -39,9 +39,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Topic not found or access denied' }, { status: 404 })
     }
 
+    const cleanTimeHorizon = timeHorizon === 'year' ? 'past 1 year' : (timeHorizon === 'all' ? 'all-time archive (no limit)' : 'past 1 month (recent)');
+
     // Prompt the LLM to generate recommendations based on the topic
     const systemPrompt = `You are a cybernetic web intelligence crawler.
 Given a research topic, recommend exactly 5 to 7 high-authority, popular, and active website URLs (such as official docs, top developer blogs, academic hubs, or news channels) that are highly relevant.
+Ensure all recommended resources are published or actively updated within the following time horizon constraint: ${cleanTimeHorizon}. Avoid outdated, obsolete, or broken URLs.
 Your output MUST be a valid JSON array of objects, where each object contains:
 - "name": A descriptive name of the resource (e.g., "Next.js 15 Blog" or "Mozilla Developer Network").
 - "url": The exact, valid HTTPS URL to the resource or page.

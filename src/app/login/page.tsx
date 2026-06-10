@@ -102,7 +102,7 @@ export default function LoginPage() {
             <Shield className="w-8 h-8 text-cyber-cyan" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            ROSEY RESEARCH PARTNER
+            NEXUS RESEARCH PARTNER
           </h1>
           <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-mono">
             Cybernetic Ingestion & Synthesis Engine
@@ -143,7 +143,7 @@ export default function LoginPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. duwunaung"
+                      placeholder="e.g. researcher"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 glass-input text-sm"
@@ -228,7 +228,7 @@ export default function LoginPage() {
                     <input
                       type="text"
                       required
-                      placeholder="duwunaung"
+                      placeholder="researcher"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 glass-input text-sm"

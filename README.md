@@ -1,4 +1,4 @@
-# 🤖 Rosey Research Partner
+# 🤖 Nexus Research Partner
 
 A premium, multi-user web application designed to track, scrape, summarize, and prioritize research topics using **Ollama Cloud** and **Tailwind CSS v4** with a dark glassmorphic design.
 
