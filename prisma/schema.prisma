@@ -1,0 +1,41 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String   // Hashed password
+  createdAt DateTime @default(now())
+  topics    Topic[]
+}
+
+model Topic {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  urls        WatchedUrl[]
+}
+
+model WatchedUrl {
+  id            String   @id @default(uuid())
+  url           String
+  title         String?
+  summary       String?
+  takeaways     String[] // Native string array in PostgreSQL
+  score         Int?
+  justification String?
+  status        String   @default("PENDING") // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
+  topicId       String
+  topic         Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+}

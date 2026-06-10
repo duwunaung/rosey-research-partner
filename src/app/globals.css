@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cyber-purple: #8b5cf6;
+  --color-cyber-indigo: #6366f1;
+  --color-cyber-cyan: #06b6d4;
+  --color-cyber-emerald: #10b981;
+  --color-cyber-dark: #09090b;
+  --color-glass-bg: rgba(10, 10, 18, 0.6);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  
+  --animate-scan: scan 3s linear infinite;
+  --animate-cyber-glow: cyber-glow 2.5s ease-in-out infinite alternate;
+  --animate-float: float 4s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+@keyframes cyber-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(99, 102, 241, 0.15), 0 0 10px rgba(6, 182, 212, 0.05);
+    border-color: rgba(99, 102, 241, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.55), 0 0 30px rgba(6, 182, 212, 0.25);
+    border-color: rgba(6, 182, 212, 0.55);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+:root {
+  --background: #030303;
+  --foreground: #f4f4f5;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(10, 10, 18, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(16, 16, 28, 0.75);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+.glass-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Custom Scanline element */
+.laser-scanline {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.8), rgba(99, 102, 241, 0.8), rgba(6, 182, 212, 0.8), transparent);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.8), 0 0 6px rgba(99, 102, 241, 0.6);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* Cyber Terminal Animation */
+.terminal-glow {
+  text-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
+}
+
+/* Flip Card Auth Layout */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
