@@ -116,10 +116,32 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
       ]
 
       let formattedBaseUrl = baseUrl.replace(/\/$/, '')
-      if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
-        formattedBaseUrl = `${formattedBaseUrl}/v1`
+      const isOllamaNative = formattedBaseUrl.endsWith('/api') || formattedBaseUrl.includes('ollama.com')
+      
+      let llmUrl = ''
+      let requestBody: any = {}
+
+      if (isOllamaNative) {
+        const baseEndpoint = formattedBaseUrl.endsWith('/api') ? formattedBaseUrl : `${formattedBaseUrl}/api`
+        llmUrl = `${baseEndpoint}/chat`
+        requestBody = {
+          model: model,
+          messages: messages,
+          stream: false,
+          format: 'json',
+        }
+      } else {
+        if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
+          formattedBaseUrl = `${formattedBaseUrl}/v1`
+        }
+        llmUrl = `${formattedBaseUrl}/chat/completions`
+        requestBody = {
+          model: model,
+          messages: messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.2,
+        }
       }
-      const llmUrl = `${formattedBaseUrl}/chat/completions`
       
       const llmHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -131,13 +153,7 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
       const llmResponse = await fetch(llmUrl, {
         method: 'POST',
         headers: llmHeaders,
-        body: JSON.stringify({
-          model: model,
-          messages: messages,
-          // Request JSON format if supported
-          response_format: { type: 'json_object' },
-          temperature: 0.2,
-        }),
+        body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(60000), // 60s timeout for LLM call
       })
 
@@ -146,7 +162,13 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
       }
 
       const llmData = await llmResponse.json()
-      let rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
+      let rawJsonText = ''
+
+      if (isOllamaNative) {
+        rawJsonText = llmData.message?.content?.trim() || ''
+      } else {
+        rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
+      }
 
       // Clean up markdown wrapper blocks if returned by the LLM
       if (rawJsonText.startsWith('```json')) {

@@ -53,10 +53,32 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
     ]
 
     let formattedBaseUrl = baseUrl.replace(/\/$/, '')
-    if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
-      formattedBaseUrl = `${formattedBaseUrl}/v1`
+    const isOllamaNative = formattedBaseUrl.endsWith('/api') || formattedBaseUrl.includes('ollama.com')
+    
+    let llmUrl = ''
+    let requestBody: any = {}
+
+    if (isOllamaNative) {
+      const baseEndpoint = formattedBaseUrl.endsWith('/api') ? formattedBaseUrl : `${formattedBaseUrl}/api`
+      llmUrl = `${baseEndpoint}/chat`
+      requestBody = {
+        model: model,
+        messages: messages,
+        stream: false,
+        format: 'json',
+      }
+    } else {
+      if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
+        formattedBaseUrl = `${formattedBaseUrl}/v1`
+      }
+      llmUrl = `${formattedBaseUrl}/chat/completions`
+      requestBody = {
+        model: model,
+        messages: messages,
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+      }
     }
-    const llmUrl = `${formattedBaseUrl}/chat/completions`
     
     const llmHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -68,12 +90,7 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
     const llmResponse = await fetch(llmUrl, {
       method: 'POST',
       headers: llmHeaders,
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-      }),
+      body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(30000), // 30s timeout
     })
 
@@ -82,7 +99,13 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
     }
 
     const llmData = await llmResponse.json()
-    let rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
+    let rawJsonText = ''
+
+    if (isOllamaNative) {
+      rawJsonText = llmData.message?.content?.trim() || ''
+    } else {
+      rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
+    }
 
     // Clean up markdown block wraps
     if (rawJsonText.startsWith('```json')) {
