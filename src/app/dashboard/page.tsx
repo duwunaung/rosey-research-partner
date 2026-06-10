@@ -146,31 +146,46 @@ export default function DashboardPage() {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
   // Initialize Config & Fetch data
-  useEffect(() => {
-    setMounted(true)
-    // Load config from localStorage (with fallback to legacy rosey_ prefix)
+  const fetchUserConfig = async () => {
+    try {
+      const res = await fetch('/api/user/config')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.provider) {
+          setProvider(data.provider)
+          setBaseUrl(data.baseUrl || '')
+          setApiKey(data.apiKey || '')
+          setModel(data.model || '')
+          
+          // Cache in localStorage
+          localStorage.setItem('nexus_provider', data.provider)
+          localStorage.setItem('nexus_baseUrl', data.baseUrl || '')
+          localStorage.setItem('nexus_apiKey', data.apiKey || '')
+          localStorage.setItem('nexus_model', data.model || '')
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load config from database, using local cache:', err)
+    }
+
+    // Fallback to localStorage if database config is empty
     const savedProvider = localStorage.getItem('nexus_provider') || localStorage.getItem('rosey_provider') || 'ollama_local'
     const savedBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl')
     const savedApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey')
     const savedModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model')
     
     setProvider(savedProvider)
-    if (savedBaseUrl) {
-      setBaseUrl(savedBaseUrl)
-    } else {
-      setBaseUrl(PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
-    }
-    
-    if (savedApiKey) setApiKey(savedApiKey)
-    
-    if (savedModel) {
-      setModel(savedModel)
-    } else {
-      setModel(PROVIDER_PRESETS[savedProvider]?.model || '')
-    }
+    setBaseUrl(savedBaseUrl || PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
+    setApiKey(savedApiKey || '')
+    setModel(savedModel || PROVIDER_PRESETS[savedProvider]?.model || '')
+  }
 
-    // Load username from session (or fallback to fetch topics)
-    fetchTopics()
+  useEffect(() => {
+    setMounted(true)
+    fetchUserConfig().then(() => {
+      fetchTopics()
+    })
   }, [])
 
   // Auto-scroll terminal to bottom
@@ -178,13 +193,31 @@ export default function DashboardPage() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [terminalLogs])
 
-  const saveConfig = () => {
+  const saveConfig = async () => {
+    // Cache locally first for instant UI response
     localStorage.setItem('nexus_provider', provider)
     localStorage.setItem('nexus_baseUrl', baseUrl)
     localStorage.setItem('nexus_apiKey', apiKey)
     localStorage.setItem('nexus_model', model)
     setIsSettingsOpen(false)
-    addLog(`[SYSTEM] LLM settings saved: [${PROVIDER_PRESETS[provider]?.name || provider}] ${model} at ${baseUrl}`)
+    addLog(`[SYSTEM] LLM settings saved: [${PROVIDER_PRESETS[provider]?.name || provider}] ${model}`)
+
+    // Sync with database profile
+    try {
+      const res = await fetch('/api/user/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, baseUrl, apiKey, model }),
+      })
+      if (res.ok) {
+        addLog(`[SYSTEM] LLM configuration synchronized with database profile.`)
+      } else {
+        const errData = await res.json()
+        addLog(`[WARNING] Database settings sync failed: ${errData.error || 'Server error'}`)
+      }
+    } catch (err: any) {
+      addLog(`[WARNING] Database settings sync error: ${err.message}`)
+    }
   }
 
   const handleTestConnection = async () => {

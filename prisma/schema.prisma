@@ -12,6 +12,10 @@ model User {
   email     String   @unique
   username  String   @unique
   password  String   // Hashed password
+  provider  String?  @default("ollama_local")
+  baseUrl   String?  @default("http://localhost:11434")
+  apiKey    String?
+  model     String?  @default("llama3.1")
   createdAt DateTime @default(now())
   topics    Topic[]
 }
