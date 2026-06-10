@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
         headers: {
           'Accept': 'text/markdown',
         },
-        // Set a 10-second timeout for scraping to prevent lockups
-        signal: AbortSignal.timeout(10000),
+        // Set a 25-second timeout for scraping to prevent lockups
+        signal: AbortSignal.timeout(25000),
       })
 
       if (!scrapeResponse.ok) {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
-          signal: AbortSignal.timeout(8000), // 8-second timeout for direct fallback
+          signal: AbortSignal.timeout(20000), // 20-second timeout for direct fallback
         })
 
         if (!directResponse.ok) {
