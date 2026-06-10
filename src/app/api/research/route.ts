@@ -61,11 +61,10 @@ export async function POST(request: NextRequest) {
       const scrapeResponse = await fetch(scrapeUrl, {
         method: 'GET',
         headers: {
-          // If you have a Jina token, you can pass it here, but it's free for public use
           'Accept': 'text/markdown',
         },
-        // Set a 15-second timeout for scraping to prevent lockups
-        signal: AbortSignal.timeout(15000),
+        // Set a 10-second timeout for scraping to prevent lockups
+        signal: AbortSignal.timeout(10000),
       })
 
       if (!scrapeResponse.ok) {
@@ -75,18 +74,58 @@ export async function POST(request: NextRequest) {
       scrapedMarkdown = await scrapeResponse.text()
 
       // Simple extraction of title from Jina markdown header if available
-      // Jina markdown usually starts with: Title: <title>
       const titleMatch = scrapedMarkdown.match(/^Title:\s*(.*)$/m)
       if (titleMatch && titleMatch[1]) {
         parsedTitle = titleMatch[1].trim()
       }
-    } catch (scrapeError: any) {
-      console.error('Scrape error:', scrapeError)
-      await db.watchedUrl.update({
-        where: { id: urlId },
-        data: { status: 'FAILED' },
-      })
-      return NextResponse.json({ error: `Scraping failed: ${scrapeError.message}` }, { status: 502 })
+    } catch (jinaError: any) {
+      console.warn('Jina Reader failed or timed out. Initiating direct fetch fallback:', jinaError.message)
+      
+      try {
+        // Fallback to direct HTTP fetch
+        const directResponse = await fetch(urlItem.url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          signal: AbortSignal.timeout(8000), // 8-second timeout for direct fallback
+        })
+
+        if (!directResponse.ok) {
+          throw new Error(`Direct fetch status: ${directResponse.status}`)
+        }
+
+        const html = await directResponse.text()
+
+        // Extract title
+        const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+        if (titleMatch && titleMatch[1]) {
+          parsedTitle = titleMatch[1].trim().replace(/\s+/g, ' ')
+        }
+
+        // Clean HTML to text
+        let cleanText = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+          .replace(/<[^>]+>/g, ' ') // Strip remaining HTML tags
+          .replace(/\s+/g, ' ')     // Normalize whitespaces
+          .trim()
+
+        scrapedMarkdown = `Title: ${parsedTitle}\n\nContent:\n${cleanText}`
+      } catch (directError: any) {
+        console.error('Direct fetch fallback also failed:', directError.message)
+        
+        await db.watchedUrl.update({
+          where: { id: urlId },
+          data: { status: 'FAILED' },
+        })
+        
+        return NextResponse.json({ 
+          error: `Scraping failed: Jina Timeout (${jinaError.message}) & Fallback Direct Fetch Failed (${directError.message})` 
+        }, { status: 502 })
+      }
     }
 
     // Update status: SUMMARIZING
