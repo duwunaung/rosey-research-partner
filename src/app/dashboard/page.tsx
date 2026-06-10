@@ -38,6 +38,58 @@ interface Suggestion {
   url: string
 }
 
+interface ProviderPreset {
+  name: string
+  baseUrl: string
+  model: string
+  placeholderKey: string
+  keyLabel: string
+  helpText: string
+}
+
+const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
+  ollama_local: {
+    name: 'Ollama (Localhost)',
+    baseUrl: 'http://localhost:11434',
+    model: 'llama3.1',
+    placeholderKey: 'No API key needed',
+    keyLabel: 'API Key (Optional)',
+    helpText: 'Ensure your local Ollama server is running (ollama run llama3.1).'
+  },
+  ollama_cloud: {
+    name: 'Ollama Cloud',
+    baseUrl: 'https://ollama.com',
+    model: 'gemma3:27b-cloud',
+    placeholderKey: 'Enter Ollama Cloud Key',
+    keyLabel: 'Ollama API Key',
+    helpText: 'Use your API key from ollama.com/settings/keys.'
+  },
+  groq: {
+    name: 'Groq Cloud',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+    placeholderKey: 'gsk_...',
+    keyLabel: 'Groq API Key',
+    helpText: 'Use your API key from console.groq.com.'
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'meta-llama/llama-3.3-70b-instruct',
+    placeholderKey: 'sk-or-...',
+    keyLabel: 'OpenRouter API Key',
+    helpText: 'Use your API key from openrouter.ai.'
+  },
+  custom: {
+    name: 'Custom (OpenAI-Compatible)',
+    baseUrl: '',
+    model: '',
+    placeholderKey: 'API key if required',
+    keyLabel: 'API Key',
+    helpText: 'Enter any custom OpenAI-compatible endpoint URL and model.'
+  }
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const terminalEndRef = useRef<HTMLDivElement>(null)
@@ -71,7 +123,8 @@ export default function DashboardPage() {
 
   // LLM Config State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1')
+  const [provider, setProvider] = useState('ollama_local')
+  const [baseUrl, setBaseUrl] = useState('http://localhost:11434')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('llama3.1')
 
@@ -87,13 +140,25 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true)
     // Load config from localStorage
+    const savedProvider = localStorage.getItem('rosey_provider') || 'ollama_local'
     const savedBaseUrl = localStorage.getItem('rosey_baseUrl')
     const savedApiKey = localStorage.getItem('rosey_apiKey')
     const savedModel = localStorage.getItem('rosey_model')
     
-    if (savedBaseUrl) setBaseUrl(savedBaseUrl)
+    setProvider(savedProvider)
+    if (savedBaseUrl) {
+      setBaseUrl(savedBaseUrl)
+    } else {
+      setBaseUrl(PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
+    }
+    
     if (savedApiKey) setApiKey(savedApiKey)
-    if (savedModel) setModel(savedModel)
+    
+    if (savedModel) {
+      setModel(savedModel)
+    } else {
+      setModel(PROVIDER_PRESETS[savedProvider]?.model || '')
+    }
 
     // Load username from session (or fallback to fetch topics)
     fetchTopics()
@@ -105,11 +170,12 @@ export default function DashboardPage() {
   }, [terminalLogs])
 
   const saveConfig = () => {
+    localStorage.setItem('rosey_provider', provider)
     localStorage.setItem('rosey_baseUrl', baseUrl)
     localStorage.setItem('rosey_apiKey', apiKey)
     localStorage.setItem('rosey_model', model)
     setIsSettingsOpen(false)
-    addLog(`[SYSTEM] LLM settings saved: ${model} at ${baseUrl}`)
+    addLog(`[SYSTEM] LLM settings saved: [${PROVIDER_PRESETS[provider]?.name || provider}] ${model} at ${baseUrl}`)
   }
 
   const handleTestConnection = async () => {
@@ -371,7 +437,7 @@ export default function DashboardPage() {
 
         // Update local state with the completed results
         setUrls(prev => prev.map(u => u.id === item.id ? data : u))
-        addLog(`[ROBOT: THINK] Sending markdown to Ollama Cloud model: ${model}`)
+        addLog(`[ROBOT: THINK] Sent markdown to ${PROVIDER_PRESETS[provider]?.name || 'LLM'} model: ${model}`)
         addLog(`[ROBOT: INDEXED] Relevance Score: ${data.score}/10 | Title: ${data.title}`)
         addLog(`[ROBOT: INDEXED] Justification: "${data.justification}"`)
 
@@ -893,7 +959,29 @@ export default function DashboardPage() {
 
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">Ollama Cloud Base URL</label>
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">API Provider</label>
+                  <select
+                    value={provider}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setProvider(val)
+                      if (val !== 'custom') {
+                        setBaseUrl(PROVIDER_PRESETS[val].baseUrl)
+                        setModel(PROVIDER_PRESETS[val].model)
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 glass-input text-sm bg-cyber-dark text-slate-200 border border-white/10 rounded-lg focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                  >
+                    {Object.entries(PROVIDER_PRESETS).map(([key, p]) => (
+                      <option key={key} value={key} className="bg-[#0f0f15] text-slate-200">
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">LLM Base URL</label>
                   <input
                     type="url"
                     value={baseUrl}
@@ -902,17 +990,19 @@ export default function DashboardPage() {
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Ensure it ends with "/v1" if utilizing an OpenAI-compatible cloud provider.
+                    Endpoint URL for LLM requests.
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">API Passphrase / Key</label>
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">
+                    {PROVIDER_PRESETS[provider]?.keyLabel || 'API Key'}
+                  </label>
                   <input
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="gho_... or sk_..."
+                    placeholder={PROVIDER_PRESETS[provider]?.placeholderKey || 'Enter API Key'}
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
@@ -930,7 +1020,7 @@ export default function DashboardPage() {
                     className="w-full px-4 py-2.5 glass-input text-sm"
                   />
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Verify the model is deployed on your Ollama Cloud instance.
+                    {PROVIDER_PRESETS[provider]?.helpText || 'Verify the model is deployed on the instance.'}
                   </p>
                 </div>
               </div>
