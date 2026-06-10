@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import bcrypt from 'bcryptjs'
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'rosey-research-partner-jwt-secret-key-change-me-in-production'
+  process.env.JWT_SECRET || 'nexus-research-partner-jwt-secret-key-change-me-in-production'
 )
 
 export async function hashPassword(password: string): Promise<string> {

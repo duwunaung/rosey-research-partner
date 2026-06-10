@@ -15,12 +15,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rosey Research Partner | Cybernetic AI Assistant",
-  description: "Track, scrape, prioritize, and summarize web research into offline PDF digests with Ollama Cloud.",
+  title: "Nexus Research Partner | Cybernetic AI Assistant",
+  description: "Track, scrape, prioritize, and summarize web research into offline PDF digests with LLMs.",
   metadataBase: new URL("https://rosey-research-partner.vercel.app"),
   openGraph: {
-    title: "Rosey Research Partner | Cybernetic AI Assistant",
-    description: "Track, scrape, prioritize, and summarize web research into offline PDF digests with Ollama Cloud.",
+    title: "Nexus Research Partner | Cybernetic AI Assistant",
+    description: "Track, scrape, prioritize, and summarize web research into offline PDF digests with LLMs.",
     type: "website",
   },
 };

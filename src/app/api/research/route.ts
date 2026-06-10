@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       // Clean content to avoid exceeding token limit (max 12000 chars of source text)
       const sanitizedContent = scrapedMarkdown.slice(0, 12000)
 
-      const systemPrompt = `You are Rosey Research Partner, a cybernetic research assistant.
+      const systemPrompt = `You are Nexus Research Partner, a cybernetic research assistant.
 Analyze the provided web page content and return a JSON object with the following fields:
 - "title": A clean, descriptive title of the article/page (do not include markdown formatting). Use "${parsedTitle}" if it's already a good title.
 - "summary": A concise, high-value summary of the page (3-4 sentences).
