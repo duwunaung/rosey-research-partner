@@ -1116,6 +1116,16 @@ export default function DashboardPage() {
 
       </div>
 
+      {/* Footer */}
+      <footer className="w-full max-w-[1700px] mx-auto px-6 py-4 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 z-10 text-xs text-slate-500 font-mono">
+        <span>&copy; 2026 Nexus Research Partner. All rights reserved.</span>
+        <div className="flex gap-4">
+          <span>Nexus Research Partner v1.0.1</span>
+          <span>&middot;</span>
+          <span>MIT License</span>
+        </div>
+      </footer>
+
       {/* ================= SETTINGS SIDEBAR ================= */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end">

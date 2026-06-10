@@ -143,7 +143,7 @@ export default function LoginPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. duwunaung"
+                      placeholder="e.g. researcher"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 glass-input text-sm"
@@ -228,7 +228,7 @@ export default function LoginPage() {
                     <input
                       type="text"
                       required
-                      placeholder="duwunaung"
+                      placeholder="researcher"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 glass-input text-sm"
