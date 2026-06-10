@@ -9,10 +9,8 @@ export async function POST(
   const { action } = await params
 
   try {
-    const body = await request.json()
-
     if (action === 'register') {
-      const { email, username, password } = body
+      const { email, username, password } = await request.json()
 
       if (!email || !username || !password) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -49,7 +47,7 @@ export async function POST(
     }
 
     if (action === 'login') {
-      const { identifier, password } = body // identifier can be username or email
+      const { identifier, password } = await request.json() // identifier can be username or email
 
       if (!identifier || !password) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -100,13 +98,7 @@ export async function POST(
 
     if (action === 'logout') {
       const response = NextResponse.json({ message: 'Logged out successfully' })
-      response.cookies.set({
-        name: 'token',
-        value: '',
-        httpOnly: true,
-        maxAge: 0,
-        path: '/',
-      })
+      response.cookies.delete('token')
       return response
     }
 
