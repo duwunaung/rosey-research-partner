@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   Shield, Plus, Trash2, Globe, Settings, LogOut, Loader, Sparkles, 
   Play, Terminal, FileText, ChevronRight, CheckCircle2, XCircle, 
-  Clock, AlertCircle, RefreshCw, Layers, Brain
+  Clock, AlertCircle, RefreshCw, Layers, Brain, Bookmark
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
@@ -29,6 +29,9 @@ interface WatchedUrl {
   score: number | null
   justification: string | null
   status: string // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
+  publishedDate: string | null
+  notes: string | null
+  revisit: boolean
   topicId: string
   createdAt: string
 }
@@ -133,6 +136,11 @@ export default function DashboardPage() {
   const [activeUrlId, setActiveUrlId] = useState<string | null>(null)
   const [terminalLogs, setTerminalLogs] = useState<string[]>([])
   const [selectedUrlDetails, setSelectedUrlDetails] = useState<WatchedUrl | null>(null)
+  const [timeHorizon, setTimeHorizon] = useState('month')
+  const [sortBy, setSortBy] = useState<'score' | 'date'>('score')
+  const [filterBy, setFilterBy] = useState<'all' | 'revisit'>('all')
+  const [customNotes, setCustomNotes] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
 
@@ -237,6 +245,29 @@ export default function DashboardPage() {
       setLoadingTopics(false)
     }
   }
+
+  // Sort and filter URLs in-memory
+  const displayedUrls = [...urls]
+    .filter(u => {
+      if (filterBy === 'revisit') return u.revisit === true
+      return true
+    })
+    .sort((a, b) => {
+      if (sortBy === 'score') {
+        if (a.status === 'COMPLETED' && b.status === 'COMPLETED') {
+          return (b.score || 0) - (a.score || 0)
+        }
+        if (a.status === 'COMPLETED') return -1
+        if (b.status === 'COMPLETED') return 1
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      } else {
+        // Sort by published date descending, fallback to createdAt
+        const dateA = a.publishedDate ? new Date(a.publishedDate).getTime() : 0
+        const dateB = b.publishedDate ? new Date(b.publishedDate).getTime() : 0
+        if (dateA !== dateB) return dateB - dateA
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+    })
 
   const fetchUrls = async (topicId: string) => {
     setLoadingUrls(true)
@@ -355,6 +386,52 @@ export default function DashboardPage() {
     }
   }
 
+  const handleToggleRevisit = async () => {
+    if (!selectedUrlDetails) return
+    const newRevisit = !selectedUrlDetails.revisit
+
+    try {
+      const res = await fetch(`/api/urls/${selectedUrlDetails.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revisit: newRevisit })
+      })
+
+      if (!res.ok) throw new Error('Failed to update bookmark')
+      const updated = await res.json()
+
+      setUrls(prev => prev.map(u => u.id === selectedUrlDetails.id ? updated : u))
+      setSelectedUrlDetails(updated)
+      addLog(`[SYSTEM] Bookmark toggled: ${updated.revisit ? 'MARKED FOR REVISIT' : 'REMOVED FROM REVISIT'}`)
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!selectedUrlDetails) return
+    setSavingNotes(true)
+
+    try {
+      const res = await fetch(`/api/urls/${selectedUrlDetails.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: customNotes })
+      })
+
+      if (!res.ok) throw new Error('Failed to save notes')
+      const updated = await res.json()
+
+      setUrls(prev => prev.map(u => u.id === selectedUrlDetails.id ? updated : u))
+      setSelectedUrlDetails(updated)
+      addLog(`[SYSTEM] Researcher notes updated successfully.`)
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
   const handleSuggestSources = async () => {
     if (!selectedTopic) return
     setLoadingSuggestions(true)
@@ -444,6 +521,7 @@ export default function DashboardPage() {
         // If this URL is currently opened in the details panel, update it
         if (selectedUrlDetails?.id === item.id) {
           setSelectedUrlDetails(data)
+          setCustomNotes(data.notes || '')
         }
       } catch (err: any) {
         console.error(err)
@@ -717,15 +795,67 @@ export default function DashboardPage() {
                 Watched Resources ({urls.length})
               </span>
               {selectedTopic && (
-                <button
-                  disabled={loadingSuggestions || researching}
-                  onClick={handleSuggestSources}
-                  className="text-[10px] font-mono text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={timeHorizon}
+                    onChange={(e) => setTimeHorizon(e.target.value)}
+                    className="bg-cyber-dark/45 text-[10px] font-mono text-slate-400 border border-white/5 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer hover:border-white/10"
+                    title="Search Horizon for AI recommendations"
+                  >
+                    <option value="month" className="bg-[#0f0f15]">Recent (1 Mo)</option>
+                    <option value="year" className="bg-[#0f0f15]">Deep (1 Yr)</option>
+                    <option value="all" className="bg-[#0f0f15]">Archive (All-Time)</option>
+                  </select>
+                  <button
+                    disabled={loadingSuggestions || researching}
+                    onClick={handleSuggestSources}
+                    className="text-[10px] font-mono text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
+                  </button>
+                </div>
               )}
             </div>
+
+            {selectedTopic && urls.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mb-3.5 text-[11px] font-mono border-b border-white/5 pb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 uppercase">Filter:</span>
+                  <button
+                    onClick={() => setFilterBy('all')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                      filterBy === 'all' 
+                        ? 'bg-cyber-indigo/25 text-cyber-indigo border border-cyber-indigo/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setFilterBy('revisit')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                      filterBy === 'revisit' 
+                        ? 'bg-cyber-cyan/25 text-cyber-cyan border border-cyber-cyan/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Revisit Later
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-slate-500 uppercase">Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as 'score' | 'date')}
+                    className="bg-cyber-dark/45 text-slate-300 border border-white/10 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                  >
+                    <option value="score" className="bg-[#0f0f15]">Relevance Score</option>
+                    <option value="date" className="bg-[#0f0f15]">Published Date</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* AI Source Recommendations panel */}
             {suggestions.length > 0 && (
@@ -770,7 +900,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                {urls.map((u) => {
+                {displayedUrls.map((u) => {
                   const isActive = activeUrlId === u.id
                   const isSelected = selectedUrlDetails?.id === u.id
                   
@@ -780,6 +910,7 @@ export default function DashboardPage() {
                       onClick={() => {
                         if (u.status === 'COMPLETED') {
                           setSelectedUrlDetails(u)
+                          setCustomNotes(u.notes || '')
                         }
                       }}
                       className={`group relative p-3.5 rounded-xl border flex items-center justify-between transition cursor-pointer ${
@@ -829,9 +960,19 @@ export default function DashboardPage() {
                           )}
                         </div>
                         
-                        <p className="text-[10px] text-slate-400 font-mono truncate max-w-sm mt-0.5">
-                          {u.url}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] font-mono text-slate-400">
+                          <span className="truncate max-w-xs">{u.url}</span>
+                          {u.publishedDate && (
+                            <span className="text-[9px] text-slate-500 bg-white/5 border border-white/5 px-1 py-0.2 rounded font-sans shrink-0">
+                              Pub: {u.publishedDate}
+                            </span>
+                          )}
+                          {u.revisit && (
+                            <span className="text-[9px] text-cyber-cyan bg-cyber-cyan/5 border border-cyber-cyan/25 px-1 py-0.2 rounded font-sans shrink-0 flex items-center gap-0.5">
+                              <Bookmark className="w-2 h-2 fill-cyber-cyan" /> Revisit
+                            </span>
+                          )}
+                        </div>
                         
                         {u.status === 'COMPLETED' && u.justification && (
                           <p className="text-[11px] text-slate-400 font-sans italic truncate max-w-md mt-1.5">
@@ -876,13 +1017,29 @@ export default function DashboardPage() {
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 {/* Score badge & Title */}
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-                      Score: {selectedUrlDetails.score}/10
-                    </span>
-                    <span className="text-[9px] font-mono text-slate-500">
-                      {new Date(selectedUrlDetails.createdAt).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
+                        Score: {selectedUrlDetails.score}/10
+                      </span>
+                      {selectedUrlDetails.publishedDate && (
+                        <span className="text-[10px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded font-sans shrink-0">
+                          Pub: {selectedUrlDetails.publishedDate}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={handleToggleRevisit}
+                      className={`p-1.5 rounded-lg border transition flex items-center justify-center cursor-pointer ${
+                        selectedUrlDetails.revisit 
+                          ? 'bg-cyber-cyan/15 border-cyber-cyan/45 text-cyber-cyan shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                          : 'bg-white/3 border-white/5 text-slate-400 hover:text-white hover:bg-white/8'
+                      }`}
+                      title={selectedUrlDetails.revisit ? "Remove from Revisit List" : "Mark to Revisit Later"}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${selectedUrlDetails.revisit ? 'fill-cyber-cyan' : ''}`} />
+                    </button>
                   </div>
                   <h3 className="text-base font-bold text-white leading-snug">{selectedUrlDetails.title}</h3>
                   <a
@@ -923,6 +1080,26 @@ export default function DashboardPage() {
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                {/* Custom Notes Section */}
+                <div className="pt-3 border-t border-white/5 space-y-2">
+                  <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400">Researcher Notes</h4>
+                  <textarea
+                    value={customNotes}
+                    onChange={(e) => setCustomNotes(e.target.value)}
+                    placeholder="Annotate key insights, research tasks, or actions to revisit later..."
+                    className="w-full h-24 p-2.5 rounded-xl border border-white/10 bg-cyber-dark/30 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyber-indigo/80 resize-none font-sans"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSaveNotes}
+                      disabled={savingNotes}
+                      className="px-3 py-1.5 rounded-lg border border-cyber-indigo/30 bg-cyber-indigo/10 hover:bg-cyber-indigo/20 text-cyber-indigo text-[10px] font-mono uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingNotes ? 'Saving...' : 'Save Notes'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

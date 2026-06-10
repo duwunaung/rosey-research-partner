@@ -110,8 +110,9 @@ Analyze the provided web page content and return a JSON object with the followin
 - "takeaways": An array of 3 to 5 core bullet points, each containing key facts, figures, or ideas. Keep them short and actionable.
 - "score": A general relevance and information density score from 1 to 10 (integer). High score means the content has deep, unique insight or documentation value; low score means it is generic, clickbait, or has low utility.
 - "justification": A 1-sentence explanation of why the content received this score.
+- "publishedDate": The publication date of the page/article in YYYY-MM-DD format if found or can be confidently inferred. If not found, return null.
 
-Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`\`json or extra text outside the JSON structure. Just return raw JSON.`
+Your output MUST be a valid JSON object. Do not include markdown wraps like ```json or extra text outside the JSON structure. Just return raw JSON.`
 
       const messages = [
         { role: 'system', content: systemPrompt },
@@ -191,6 +192,7 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
           takeaways: parsedResults.takeaways || [],
           score: Number(parsedResults.score) || 5,
           justification: parsedResults.justification || 'No justification provided.',
+          publishedDate: parsedResults.publishedDate || null,
           status: 'COMPLETED',
         },
       })

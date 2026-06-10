@@ -35,6 +35,9 @@ model WatchedUrl {
   score         Int?
   justification String?
   status        String   @default("PENDING") // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
+  publishedDate String?
+  notes         String?
+  revisit       Boolean  @default(false)
   topicId       String
   topic         Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
