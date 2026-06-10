@@ -143,6 +143,7 @@ export default function DashboardPage() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
   // Initialize Config & Fetch data
   useEffect(() => {
@@ -271,6 +272,10 @@ export default function DashboardPage() {
 
   const fetchUrls = async (topicId: string) => {
     setLoadingUrls(true)
+    // Load last sync time
+    const savedSync = localStorage.getItem(`nexus_last_sync_${topicId}`)
+    setLastSyncTime(savedSync || null)
+
     try {
       const res = await fetch(`/api/urls?topicId=${topicId}`)
       if (!res.ok) throw new Error('Failed to fetch URLs')
@@ -286,6 +291,21 @@ export default function DashboardPage() {
       })
       setUrls(sorted)
       setSuggestions([]) // Clear suggestions on topic switch
+
+      // Auto-sync: if there are any PENDING items and we are not currently researching
+      const pendingItems = sorted.filter((u: WatchedUrl) => u.status === 'PENDING')
+      if (pendingItems.length > 0 && !researching) {
+        // Read LLM config directly from localStorage to prevent React state batching race conditions on initial mount
+        const currentProvider = localStorage.getItem('nexus_provider') || localStorage.getItem('rosey_provider') || 'ollama_local'
+        const currentBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl') || PROVIDER_PRESETS[currentProvider]?.baseUrl || ''
+        const currentApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey') || ''
+        const currentModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model') || PROVIDER_PRESETS[currentProvider]?.model || ''
+
+        if (currentBaseUrl && currentModel) {
+          addLog(`[SYSTEM] Detected ${pendingItems.length} pending target(s). Auto-triggering research sync...`)
+          runPipeline(pendingItems, currentBaseUrl, currentApiKey, currentModel)
+        }
+      }
     } catch (err: any) {
       console.error(err)
       addLog(`[ERROR] Failed to fetch watched URLs.`)
@@ -481,11 +501,15 @@ export default function DashboardPage() {
     }
   }
 
-  const runPipeline = async (urlItems: WatchedUrl[]) => {
+  const runPipeline = async (urlItems: WatchedUrl[], customBaseUrl?: string, customApiKey?: string, customModel?: string) => {
     setResearching(true)
     setTerminalLogs([])
+    const activeBaseUrl = customBaseUrl || baseUrl
+    const activeApiKey = customApiKey || apiKey
+    const activeModel = customModel || model
+
     addLog(`[SYSTEM: BOOT] Starting cybernetic ingestion engine...`)
-    addLog(`[SYSTEM: CONFIG] LLM: ${model} | Scraper: Jina Reader API`)
+    addLog(`[SYSTEM: CONFIG] LLM: ${activeModel} | Scraper: Jina Reader API`)
 
     for (let i = 0; i < urlItems.length; i++) {
       const item = urlItems[i]
@@ -502,7 +526,7 @@ export default function DashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             urlId: item.id,
-            config: { baseUrl, apiKey, model }
+            config: { baseUrl: activeBaseUrl, apiKey: activeApiKey, model: activeModel }
           })
         })
 
@@ -514,7 +538,7 @@ export default function DashboardPage() {
 
         // Update local state with the completed results
         setUrls(prev => prev.map(u => u.id === item.id ? data : u))
-        addLog(`[ROBOT: THINK] Sent markdown to ${PROVIDER_PRESETS[provider]?.name || 'LLM'} model: ${model}`)
+        addLog(`[ROBOT: THINK] Sent markdown to ${PROVIDER_PRESETS[provider]?.name || 'LLM'} model: ${activeModel}`)
         addLog(`[ROBOT: INDEXED] Relevance Score: ${data.score}/10 | Title: ${data.title}`)
         addLog(`[ROBOT: INDEXED] Justification: "${data.justification}"`)
 
@@ -534,8 +558,12 @@ export default function DashboardPage() {
     setResearching(false)
     addLog(`[SYSTEM: SUCCESS] Ingestion engine cycle completed.`)
     
-    // Refresh and auto-sort URLs by score
-    if (selectedTopic) fetchUrls(selectedTopic.id)
+    // Refresh and update sync time
+    if (selectedTopic) {
+      const syncTime = new Date().toLocaleString()
+      localStorage.setItem(`nexus_last_sync_${selectedTopic.id}`, syncTime)
+      fetchUrls(selectedTopic.id)
+    }
   }
 
   const handleLogout = async () => {
@@ -735,9 +763,16 @@ export default function DashboardPage() {
           {/* Active Topic Header / Controls */}
           <div className="glass-panel rounded-2xl p-4 bg-cyber-dark/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <div>
-              <h2 className="text-lg font-bold text-white tracking-wide">
-                {selectedTopic ? selectedTopic.name : 'No Workspace Selected'}
-              </h2>
+              <div className="flex items-center flex-wrap gap-2.5">
+                <h2 className="text-lg font-bold text-white tracking-wide">
+                  {selectedTopic ? selectedTopic.name : 'No Workspace Selected'}
+                </h2>
+                {selectedTopic && (
+                  <span className="text-[10px] font-mono bg-[#0f0f15] border border-white/10 text-slate-400 px-2 py-0.5 rounded-full">
+                    {lastSyncTime ? `Last Synced: ${lastSyncTime}` : 'Never Synced'}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400 font-sans truncate max-w-sm mt-0.5">
                 {selectedTopic?.description || 'Select or create a workspace topic to launch.'}
               </p>
