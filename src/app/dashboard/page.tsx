@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const [activeUrlId, setActiveUrlId] = useState<string | null>(null)
   const [terminalLogs, setTerminalLogs] = useState<string[]>([])
   const [selectedUrlDetails, setSelectedUrlDetails] = useState<WatchedUrl | null>(null)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
 
   // Initialize Config & Fetch data
   useEffect(() => {
@@ -108,6 +110,36 @@ export default function DashboardPage() {
     localStorage.setItem('rosey_model', model)
     setIsSettingsOpen(false)
     addLog(`[SYSTEM] LLM settings saved: ${model} at ${baseUrl}`)
+  }
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true)
+    setTestResult(null)
+    addLog(`[SYSTEM: TEST] Sending heartbeat to: ${baseUrl} (model: ${model})`)
+
+    try {
+      const res = await fetch('/api/research/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: { baseUrl, apiKey, model }
+        })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setTestResult({ success: true })
+        addLog(`[SYSTEM: TEST] Connection to LLM established successfully!`)
+      } else {
+        setTestResult({ success: false, error: data.error || 'Connection failed' })
+        addLog(`[SYSTEM: TEST] Connection failed: ${data.error || 'Unknown error'}`)
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, error: err.message })
+      addLog(`[SYSTEM: TEST] Network error: ${err.message}`)
+    } finally {
+      setTestingConnection(false)
+    }
   }
 
   const addLog = (message: string) => {
@@ -904,12 +936,37 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <button
-              onClick={saveConfig}
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-cyber-indigo to-cyber-cyan text-white font-medium text-sm hover:opacity-90 active:scale-98 cursor-pointer shadow-[0_4px_15px_rgba(99,102,241,0.25)]"
-            >
-              Link Core Engine
-            </button>
+            {/* Connection Test Status feedback */}
+            {testResult && (
+              <div className={`mb-3 p-3 rounded-lg border text-xs font-mono tracking-wide ${
+                testResult.success 
+                  ? 'border-cyber-emerald/30 bg-cyber-emerald/5 text-cyber-emerald'
+                  : 'border-red-500/30 bg-red-500/5 text-red-400'
+              }`}>
+                {testResult.success 
+                  ? '[SUCCESS]: Core LLM linked & online.'
+                  : `[FAIL]: ${testResult.error}`
+                }
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                disabled={testingConnection}
+                onClick={handleTestConnection}
+                className="flex-1 py-3 rounded-lg border border-white/10 bg-white/3 text-slate-300 font-medium text-sm hover:bg-white/8 active:scale-98 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {testingConnection ? <Loader className="w-4 h-4 animate-spin text-cyber-cyan" /> : null}
+                {testingConnection ? 'Testing...' : 'Test Connection'}
+              </button>
+              
+              <button
+                onClick={saveConfig}
+                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyber-indigo to-cyber-cyan text-white font-medium text-sm hover:opacity-90 active:scale-98 cursor-pointer shadow-[0_4px_15px_rgba(99,102,241,0.25)]"
+              >
+                Link Core Engine
+              </button>
+            </div>
           </div>
         </div>
       )}
