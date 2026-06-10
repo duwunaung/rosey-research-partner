@@ -112,7 +112,7 @@ Analyze the provided web page content and return a JSON object with the followin
 - "justification": A 1-sentence explanation of why the content received this score.
 - "publishedDate": The publication date of the page/article in YYYY-MM-DD format if found or can be confidently inferred. If not found, return null.
 
-Your output MUST be a valid JSON object. Do not include markdown wraps like ```json or extra text outside the JSON structure. Just return raw JSON.`
+Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`\`json or extra text outside the JSON structure. Just return raw JSON.`
 
       const messages = [
         { role: 'system', content: systemPrompt },
