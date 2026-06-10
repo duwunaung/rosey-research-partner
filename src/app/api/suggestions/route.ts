@@ -52,7 +52,11 @@ Do not write markdown tags like \`\`\`json or add extra conversations. Just retu
       { role: 'user', content: userPrompt }
     ]
 
-    const llmUrl = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+    let formattedBaseUrl = baseUrl.replace(/\/$/, '')
+    if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
+      formattedBaseUrl = `${formattedBaseUrl}/v1`
+    }
+    const llmUrl = `${formattedBaseUrl}/chat/completions`
     
     const llmHeaders: Record<string, string> = {
       'Content-Type': 'application/json',

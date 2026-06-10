@@ -115,7 +115,11 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
         { role: 'user', content: `Analyze the following webpage markdown:\n\n${sanitizedContent}` }
       ]
 
-      const llmUrl = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+      let formattedBaseUrl = baseUrl.replace(/\/$/, '')
+      if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
+        formattedBaseUrl = `${formattedBaseUrl}/v1`
+      }
+      const llmUrl = `${formattedBaseUrl}/chat/completions`
       
       const llmHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
