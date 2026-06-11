@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { 
   Shield, Plus, Trash2, Globe, Settings, LogOut, Loader, Sparkles, 
   Play, Terminal, FileText, ChevronRight, CheckCircle2, XCircle, 
-  Clock, AlertCircle, RefreshCw, Layers, Brain, Bookmark
+  Clock, AlertCircle, RefreshCw, Layers, Brain, Bookmark, Search
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas-pro'
+import KnowledgeGraph from '@/components/KnowledgeGraph'
 
 interface Topic {
   id: string
@@ -157,6 +158,12 @@ export default function DashboardPage() {
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
+
+  // View Mode & Agentic Deep-Dive states
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list')
+  const [deepDivingParentId, setDeepDivingParentId] = useState<string | null>(null)
+  const [deepDiveStatus, setDeepDiveStatus] = useState<string | null>(null)
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState<'overview' | 'deepdive'>('overview')
 
   // Initialize Config & Fetch data
   const fetchUserConfig = async () => {
@@ -709,6 +716,164 @@ export default function DashboardPage() {
     }
   }
 
+  // Initiate Deep-Dive citation extraction
+  const handleInitiateDeepDive = async (parentUrlId: string) => {
+    if (researching || !selectedTopic) return
+    setDeepDivingParentId(parentUrlId)
+    setDeepDiveStatus('INITIATING')
+    addLog(`[SYSTEM: DEEP-DIVE] Commencing citation exploration for parent URL: ${parentUrlId}`)
+
+    try {
+      const res = await fetch('/api/research/deep-dive/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urlId: parentUrlId,
+          config: { baseUrl, apiKey, model }
+        })
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Deep-dive initiation failed')
+
+      const subSources = data.subSources || []
+      addLog(`[SYSTEM: DEEP-DIVE] Discovered ${subSources.length} critical citations. Ingesting into watchlist...`)
+
+      if (subSources.length > 0) {
+        // Prepend new sub-sources to our urls state
+        setUrls(prev => [...subSources, ...prev])
+        
+        // Start research pipeline for these sub-sources
+        setDeepDiveStatus('RESEARCHING_CITATIONS')
+        addLog(`[SYSTEM: DEEP-DIVE] Spawning research subprocesses for citation core...`)
+        await runPipeline(subSources)
+        setDeepDiveStatus('CITATIONS_COMPLETE')
+      } else {
+        setDeepDiveStatus('NO_CITATIONS_FOUND')
+        addLog(`[SYSTEM: DEEP-DIVE] No new citations discovered.`)
+      }
+    } catch (err: any) {
+      console.error(err)
+      setDeepDiveStatus('FAILED')
+      addLog(`[ERROR] Deep-dive initiation failed: ${err.message}`)
+    } finally {
+      setDeepDivingParentId(null)
+    }
+  }
+
+  // Compile synthesized comparative report
+  const handleCompileSynthesis = async (parentUrlId: string) => {
+    if (!selectedTopic) return
+    setDeepDivingParentId(parentUrlId)
+    setDeepDiveStatus('SYNTHESIZING')
+    addLog(`[SYSTEM: DEEP-DIVE] Compiling comparative report for citations mesh...`)
+
+    try {
+      const res = await fetch('/api/research/deep-dive/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urlId: parentUrlId,
+          config: { baseUrl, apiKey, model }
+        })
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Synthesis compilation failed')
+
+      // Update local state for the parent URL
+      setUrls(prev => prev.map(u => u.id === parentUrlId ? data : u))
+      setSelectedUrlDetails(data)
+      setActiveAnalysisTab('deepdive')
+      addLog(`[SYSTEM: DEEP-DIVE] Deep-dive synthesis compiled successfully!`)
+    } catch (err: any) {
+      console.error(err)
+      addLog(`[ERROR] Synthesis compilation failed: ${err.message}`)
+    } finally {
+      setDeepDivingParentId(null)
+      setDeepDiveStatus(null)
+    }
+  }
+
+  // Simple Markdown renderer
+  const renderMarkdown = (md: string) => {
+    if (!md) return null
+    const lines = md.split('\n')
+    let inList = false
+    const listItems: React.ReactNode[] = []
+    const elements: React.ReactNode[] = []
+
+    const flushList = (key: string | number) => {
+      if (listItems.length > 0) {
+        elements.push(
+          <ul key={`ul-${key}`} className="list-disc pl-5 my-2 space-y-1.5 text-slate-300 font-sans text-xs">
+            {[...listItems]}
+          </ul>
+        )
+        listItems.length = 0
+      }
+      inList = false
+    }
+
+    const formatInlineMarkdown = (text: string) => {
+      const regex = /(\*\*.*?\*\*|`.*?`)/g
+      const matches = text.split(regex)
+
+      return matches.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="text-white font-semibold">{part.slice(2, -2)}</strong>
+        } else if (part.startsWith('`') && part.endsWith('`')) {
+          return <code key={i} className="bg-cyber-dark/45 border border-white/5 px-1 py-0.2 rounded font-mono text-cyber-cyan text-[10px]">{part.slice(1, -1)}</code>
+        }
+        return part
+      })
+    }
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim()
+      
+      if (trimmed.startsWith('# ')) {
+        flushList(idx)
+        elements.push(
+          <h1 key={idx} className="text-sm font-bold font-mono text-white tracking-wide border-b border-white/5 pb-1 mt-4 mb-2 uppercase">
+            {trimmed.slice(2)}
+          </h1>
+        )
+      } else if (trimmed.startsWith('## ')) {
+        flushList(idx)
+        elements.push(
+          <h2 key={idx} className="text-xs font-bold font-mono text-cyber-cyan tracking-wider uppercase mt-4 mb-2">
+            {trimmed.slice(3)}
+          </h2>
+        )
+      } else if (trimmed.startsWith('### ')) {
+        flushList(idx)
+        elements.push(
+          <h3 key={idx} className="text-[10px] font-bold font-mono text-cyber-indigo tracking-widest uppercase mt-3 mb-1.5">
+            {trimmed.slice(4)}
+          </h3>
+        )
+      } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        inList = true
+        const content = formatInlineMarkdown(trimmed.slice(2))
+        listItems.push(<li key={`li-${idx}`}>{content}</li>)
+      } else if (trimmed === '') {
+        flushList(idx)
+      } else {
+        flushList(idx)
+        const content = formatInlineMarkdown(trimmed)
+        elements.push(
+          <p key={idx} className="text-xs text-slate-300 leading-relaxed my-2 font-sans">
+            {content}
+          </p>
+        )
+      }
+    })
+
+    flushList('end')
+    return <div className="space-y-1">{elements}</div>
+  }
+
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
@@ -787,6 +952,26 @@ export default function DashboardPage() {
       {/* Decorative cosmic glows */}
       <div className="absolute top-0 right-1/4 w-[450px] h-[450px] rounded-full bg-cyber-indigo/10 blur-[130px] pointer-events-none" />
       <div className="absolute bottom-0 left-1/4 w-[450px] h-[450px] rounded-full bg-cyber-cyan/8 blur-[130px] pointer-events-none" />
+
+      {/* Device Orientation Rotation warning (portrait view lock) */}
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050508] text-center p-6 border-2 border-cyber-cyan/30 m-4 rounded-3xl backdrop-blur-xl pointer-events-auto portrait:flex landscape:hidden lg:hidden">
+        <div className="relative p-8 rounded-2xl glass-panel border-cyber-cyan/35 bg-cyber-cyan/5 max-w-sm flex flex-col items-center gap-6 animate-cyber-glow">
+          <div className="p-4 rounded-full bg-cyber-cyan/10 border border-cyber-cyan/40 animate-pulse">
+            <RefreshCw className="w-8 h-8 text-cyber-cyan animate-spin" style={{ animationDuration: '4s' }} />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold font-mono tracking-widest text-cyber-cyan uppercase">
+              ROTATE YOUR DEVICE
+            </h3>
+            <p className="text-xs text-slate-400 font-sans leading-relaxed">
+              The Nexus Research Console requires a landscape viewport for optimal terminal layouts and network visualization.
+            </p>
+          </div>
+          <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest border-t border-white/5 pt-4 w-full">
+            Terminal status: locked
+          </div>
+        </div>
+      </div>
 
       {/* Top Navbar */}
       <nav className="sticky top-0 z-25 w-full px-6 py-4 glass-panel border-b border-white/5 flex justify-between items-center bg-cyber-dark/40 backdrop-blur-md">
@@ -1048,11 +1233,33 @@ export default function DashboardPage() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as 'score' | 'date')}
-                    className="bg-cyber-dark/45 text-slate-300 border border-white/10 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                    className="bg-cyber-dark/45 text-slate-300 border border-white/10 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:border-cyber-cyan cursor-pointer mr-3"
                   >
                     <option value="score" className="bg-[#0f0f15]">Relevance Score</option>
                     <option value="date" className="bg-[#0f0f15]">Published Date</option>
                   </select>
+
+                  <span className="text-slate-500 uppercase">View:</span>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer text-[10px] ${
+                      viewMode === 'list' 
+                        ? 'bg-cyber-indigo/25 text-cyber-indigo border border-cyber-indigo/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    List
+                  </button>
+                  <button
+                    onClick={() => setViewMode('graph')}
+                    className={`px-2 py-0.5 rounded transition cursor-pointer text-[10px] ${
+                      viewMode === 'graph' 
+                        ? 'bg-cyber-cyan/25 text-cyber-cyan border border-cyber-cyan/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Mesh
+                  </button>
                 </div>
               </div>
             )}
@@ -1114,6 +1321,17 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 max-w-xs mt-1">
                   Add URLs above or click "Suggest Sources" to query resources related to {selectedTopic?.name}.
                 </p>
+              </div>
+            ) : viewMode === 'graph' ? (
+              <div className="flex-1 min-h-[350px]">
+                <KnowledgeGraph
+                  urls={urls}
+                  selectedUrlId={selectedUrlDetails?.id || null}
+                  onSelectUrl={(u) => {
+                    setSelectedUrlDetails(u)
+                    setCustomNotes(u.notes || '')
+                  }}
+                />
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
@@ -1234,96 +1452,199 @@ export default function DashboardPage() {
               <Brain className="w-4 h-4" /> Cognitive Analysis
             </div>
 
-            {selectedUrlDetails ? (
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                {/* Score badge & Title */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-                        Score: {selectedUrlDetails.score}/10
-                      </span>
-                      {selectedUrlDetails.publishedDate && (
-                        <span className="text-[10px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded font-sans shrink-0">
-                          Pub: {selectedUrlDetails.publishedDate}
+            {selectedUrlDetails ? (() => {
+              const currentSubSources = urls.filter(u => u.parentId === selectedUrlDetails.id)
+              const hasDeepDive = currentSubSources.length > 0
+              const allSubSourcesCompleted = hasDeepDive && currentSubSources.every(s => s.status === 'COMPLETED' || s.status === 'FAILED')
+              const completedSubSourcesCount = currentSubSources.filter(s => s.status === 'COMPLETED').length
+
+              return (
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                  {/* Score badge & Title */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyber-cyan/15 border border-cyber-cyan/40 text-cyber-cyan shadow-[0_0_10px_rgba(6,182,212,0.1)]">
+                          Score: {selectedUrlDetails.score}/10
                         </span>
+                        {selectedUrlDetails.publishedDate && (
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded font-sans shrink-0">
+                            Pub: {selectedUrlDetails.publishedDate}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={handleToggleRevisit}
+                        className={`p-1.5 rounded-lg border transition flex items-center justify-center cursor-pointer ${
+                          selectedUrlDetails.revisit 
+                            ? 'bg-cyber-cyan/15 border-cyber-cyan/45 text-cyber-cyan shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                            : 'bg-white/3 border-white/5 text-slate-400 hover:text-white hover:bg-white/8'
+                        }`}
+                        title={selectedUrlDetails.revisit ? "Remove from Revisit List" : "Mark to Revisit Later"}
+                      >
+                        <Bookmark className={`w-3.5 h-3.5 ${selectedUrlDetails.revisit ? 'fill-cyber-cyan' : ''}`} />
+                      </button>
+                    </div>
+                    <h3 className="text-base font-bold text-white leading-snug">{selectedUrlDetails.title}</h3>
+                    <a
+                      href={selectedUrlDetails.url}
+                      target="_blank"
+                      className="text-[10px] text-cyber-indigo hover:underline font-mono truncate block mt-1"
+                    >
+                      View Source URL &rarr;
+                    </a>
+                  </div>
+
+                  {/* Deep-Dive Agentic controls */}
+                  {!hasDeepDive && (
+                    <button
+                      onClick={() => handleInitiateDeepDive(selectedUrlDetails.id)}
+                      disabled={deepDivingParentId !== null || researching}
+                      className="w-full py-2 rounded-xl bg-gradient-to-r from-cyber-indigo to-cyber-cyan text-white text-[10px] font-mono uppercase tracking-wider hover:opacity-90 active:scale-98 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_4px_15px_rgba(99,102,241,0.2)]"
+                    >
+                      {deepDivingParentId === selectedUrlDetails.id ? (
+                        <>
+                          <Loader className="w-3.5 h-3.5 animate-spin animate-ping" /> Discovering Citations...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-3.5 h-3.5 text-cyber-cyan" /> Initiate Agentic Deep Dive
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {hasDeepDive && !selectedUrlDetails.deepDiveReport && (
+                    <div className="p-3 rounded-lg border border-cyber-cyan/25 bg-cyber-cyan/5 text-[10px] font-mono space-y-2">
+                      <div className="flex justify-between items-center text-cyber-cyan uppercase">
+                        <span>Citations Ingestion</span>
+                        <span>{completedSubSourcesCount}/{currentSubSources.length} Synced</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-cyber-cyan transition-all duration-300"
+                          style={{ width: `${(completedSubSourcesCount / currentSubSources.length) * 100}%` }}
+                        />
+                      </div>
+                      {allSubSourcesCompleted && (
+                        <button
+                          onClick={() => handleCompileSynthesis(selectedUrlDetails.id)}
+                          disabled={deepDivingParentId !== null}
+                          className="w-full py-1.5 rounded bg-cyber-cyan/15 border border-cyber-cyan/35 text-cyber-cyan text-[10px] uppercase font-bold tracking-wider hover:bg-cyber-cyan/25 transition cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          {deepDivingParentId === selectedUrlDetails.id ? (
+                            <>
+                              <Loader className="w-3.5 h-3.5 animate-spin" /> Synthesizing...
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-3.5 h-3.5 text-cyber-cyan" /> Compile Deep-Dive Synthesis
+                            </>
+                          )}
+                        </button>
                       )}
                     </div>
-                    
-                    <button
-                      onClick={handleToggleRevisit}
-                      className={`p-1.5 rounded-lg border transition flex items-center justify-center cursor-pointer ${
-                        selectedUrlDetails.revisit 
-                          ? 'bg-cyber-cyan/15 border-cyber-cyan/45 text-cyber-cyan shadow-[0_0_12px_rgba(6,182,212,0.2)]'
-                          : 'bg-white/3 border-white/5 text-slate-400 hover:text-white hover:bg-white/8'
-                      }`}
-                      title={selectedUrlDetails.revisit ? "Remove from Revisit List" : "Mark to Revisit Later"}
-                    >
-                      <Bookmark className={`w-3.5 h-3.5 ${selectedUrlDetails.revisit ? 'fill-cyber-cyan' : ''}`} />
-                    </button>
-                  </div>
-                  <h3 className="text-base font-bold text-white leading-snug">{selectedUrlDetails.title}</h3>
-                  <a
-                    href={selectedUrlDetails.url}
-                    target="_blank"
-                    className="text-[10px] text-cyber-indigo hover:underline font-mono truncate block mt-1"
-                  >
-                    View Source URL &rarr;
-                  </a>
-                </div>
+                  )}
 
-                {/* Relevance rationale */}
-                <div className="p-3 rounded-lg border border-white/5 bg-white/2">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-cyber-cyan" /> Relevance Reason
-                  </p>
-                  <p className="text-xs text-slate-300 leading-relaxed font-sans italic">
-                    "{selectedUrlDetails.justification}"
-                  </p>
-                </div>
+                  {/* Deep-Dive Report tab system */}
+                  {selectedUrlDetails.deepDiveReport && (
+                    <div className="flex border-b border-white/5 text-[10px] font-mono">
+                      <button
+                        onClick={() => setActiveAnalysisTab('overview')}
+                        className={`flex-1 py-1.5 text-center border-b transition cursor-pointer ${
+                          activeAnalysisTab === 'overview'
+                            ? 'border-cyber-indigo text-cyber-indigo font-bold'
+                            : 'border-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Overview
+                      </button>
+                      <button
+                        onClick={() => setActiveAnalysisTab('deepdive')}
+                        className={`flex-1 py-1.5 text-center border-b transition cursor-pointer ${
+                          activeAnalysisTab === 'deepdive'
+                            ? 'border-cyber-cyan text-cyber-cyan font-bold bg-cyber-cyan/5'
+                            : 'border-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Deep-Dive Synthesis
+                      </button>
+                    </div>
+                  )}
 
-                {/* Summary */}
-                <div>
-                  <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-1.5">Summary</h4>
-                  <p className="text-xs text-slate-300 leading-relaxed font-sans bg-cyber-dark/45 p-3 rounded-xl border border-white/5">
-                    {selectedUrlDetails.summary}
-                  </p>
-                </div>
+                  {(activeAnalysisTab === 'overview' || !selectedUrlDetails.deepDiveReport) ? (
+                    <>
+                      {/* Relevance rationale */}
+                      <div className="p-3 rounded-lg border border-white/5 bg-white/2">
+                        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-cyber-cyan" /> Relevance Reason
+                        </p>
+                        <p className="text-xs text-slate-300 leading-relaxed font-sans italic">
+                          "{selectedUrlDetails.justification}"
+                        </p>
+                      </div>
 
-                {/* Key Takeaways */}
-                <div>
-                  <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-1.5">Key Takeaways</h4>
-                  <ul className="space-y-2">
-                    {selectedUrlDetails.takeaways.map((point, index) => (
-                      <li key={index} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyber-indigo mt-1.5 shrink-0" />
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                      {/* Summary */}
+                      <div>
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-1.5">Summary</h4>
+                        <p className="text-xs text-slate-300 leading-relaxed font-sans bg-cyber-dark/45 p-3 rounded-xl border border-white/5">
+                          {selectedUrlDetails.summary}
+                        </p>
+                      </div>
 
-                {/* Custom Notes Section */}
-                <div className="pt-3 border-t border-white/5 space-y-2">
-                  <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400">Researcher Notes</h4>
-                  <textarea
-                    value={customNotes}
-                    onChange={(e) => setCustomNotes(e.target.value)}
-                    placeholder="Annotate key insights, research tasks, or actions to revisit later..."
-                    className="w-full h-24 p-2.5 rounded-xl border border-white/10 bg-cyber-dark/30 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyber-indigo/80 resize-none font-sans"
-                  />
-                  <div className="flex justify-end">
-                    <button
-                      onClick={handleSaveNotes}
-                      disabled={savingNotes}
-                      className="px-3 py-1.5 rounded-lg border border-cyber-indigo/30 bg-cyber-indigo/10 hover:bg-cyber-indigo/20 text-cyber-indigo text-[10px] font-mono uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
-                    >
-                      {savingNotes ? 'Saving...' : 'Save Notes'}
-                    </button>
-                  </div>
+                      {/* Key Takeaways */}
+                      <div>
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-1.5">Key Takeaways</h4>
+                        <ul className="space-y-2">
+                          {selectedUrlDetails.takeaways.map((point, index) => (
+                            <li key={index} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyber-indigo mt-1.5 shrink-0" />
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Custom Notes Section */}
+                      <div className="pt-3 border-t border-white/5 space-y-2">
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Researcher Notes</h4>
+                        <textarea
+                          value={customNotes}
+                          onChange={(e) => setCustomNotes(e.target.value)}
+                          placeholder="Annotate key insights, research tasks, or actions to revisit later..."
+                          className="w-full h-24 p-2.5 rounded-xl border border-white/10 bg-cyber-dark/30 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyber-indigo/80 resize-none font-sans"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            onClick={handleSaveNotes}
+                            disabled={savingNotes}
+                            className="px-3 py-1.5 rounded-lg border border-cyber-indigo/30 bg-cyber-indigo/10 hover:bg-cyber-indigo/20 text-cyber-indigo text-[10px] font-mono uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
+                          >
+                            {savingNotes ? 'Saving...' : 'Save Notes'}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-3.5 rounded-xl border border-cyber-cyan/25 bg-cyber-cyan/5 space-y-4 animate-cyber-glow max-w-full overflow-x-hidden">
+                      {renderMarkdown(selectedUrlDetails.deepDiveReport)}
+                      
+                      <div className="pt-2 flex justify-end border-t border-white/5">
+                        <button
+                          onClick={() => handleCompileSynthesis(selectedUrlDetails.id)}
+                          disabled={deepDivingParentId !== null}
+                          className="px-2.5 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cyber-cyan/35 text-[9px] font-mono text-slate-400 hover:text-cyber-cyan transition cursor-pointer flex items-center gap-1"
+                          title="Re-run synthesis using current sub-source details"
+                        >
+                          <RefreshCw className="w-2.5 h-2.5" /> Recompile Report
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ) : (
+              )
+            })() : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500">
                 <Brain className="w-10 h-10 text-slate-700 mb-3" />
                 <p className="text-xs font-mono">Cognitive core idle.</p>
@@ -1338,10 +1659,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Footer */}
-      <footer className="lg:hidden w-full px-6 py-3 border-t border-white/5 flex flex-col gap-1.5 items-center z-10 text-[10px] text-slate-500 font-mono bg-[#050508]/50">
+      <footer className="w-full px-6 py-3 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-1.5 z-10 text-[10px] text-slate-500 font-mono bg-[#050508]/50">
         <span>&copy; 2026 Nexus Research Partner</span>
         <div className="flex gap-3 text-slate-600">
-          <span>v1.0.1</span>
+          <span>v1.5.1</span>
           <span>&middot;</span>
           <span>MIT License</span>
         </div>
@@ -1629,7 +1950,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div style={{ borderBottom: '2px solid rgba(99,102,241,0.5)', paddingBottom: '20px', marginBottom: '25px' }}>
             <div style={{ float: 'right', fontSize: '12px', fontFamily: 'monospace', color: '#06b6d4' }}>
-              NEXUS DIGEST ENGINE v1.0.1
+              NEXUS DIGEST ENGINE v1.5.1
             </div>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', letterSpacing: '0.05em', color: '#fff' }}>
               RESEARCH SYNTHESIS DIGEST

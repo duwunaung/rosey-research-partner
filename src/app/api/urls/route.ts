@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { url, topicId } = await request.json()
+    const { url, topicId, parentId, justification } = await request.json()
 
     if (!url || !topicId) {
       return NextResponse.json({ error: 'URL and Topic ID are required' }, { status: 400 })
@@ -81,6 +81,8 @@ export async function POST(request: NextRequest) {
         title: domain, // Initial placeholder title
         status: 'PENDING',
         topicId,
+        parentId: parentId || null,
+        justification: justification || null,
       },
     })
 

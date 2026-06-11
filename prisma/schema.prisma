@@ -33,18 +33,24 @@ model Topic {
 }
 
 model WatchedUrl {
-  id            String   @id @default(uuid())
-  url           String
-  title         String?
-  summary       String?
-  takeaways     String[] // Native string array in PostgreSQL
-  score         Int?
-  justification String?
-  status        String   @default("PENDING") // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
-  publishedDate String?
-  notes         String?
-  revisit       Boolean  @default(false)
-  topicId       String
-  topic         Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
+  id             String       @id @default(uuid())
+  url            String
+  title          String?
+  summary        String?
+  takeaways      String[]     // Native string array in PostgreSQL
+  score          Int?
+  justification  String?
+  status         String       @default("PENDING") // PENDING, SCRAPING, SUMMARIZING, COMPLETED, FAILED
+  publishedDate  String?
+  notes          String?
+  revisit        Boolean      @default(false)
+  topicId        String
+  topic          Topic        @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  // Deep-Dive Relations & Synthesis
+  deepDiveReport String?      // Synthesized comparative report (Markdown)
+  parentId       String?
+  parent         WatchedUrl?  @relation("SubSources", fields: [parentId], references: [id], onDelete: Cascade)
+  subSources     WatchedUrl[] @relation("SubSources")
 }
