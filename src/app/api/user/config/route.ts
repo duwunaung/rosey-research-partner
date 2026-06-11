@@ -18,10 +18,13 @@ export async function GET(request: NextRequest) {
     const userData = await db.user.findUnique({
       where: { id: user.userId },
       select: {
+        username: true,
         provider: true,
         baseUrl: true,
         apiKey: true,
         model: true,
+        confirmModel: true,
+        llmConfigs: true,
       },
     })
 
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { provider, baseUrl, apiKey, model } = await request.json()
+    const { provider, baseUrl, apiKey, model, confirmModel, llmConfigs } = await request.json()
 
     const updatedUser = await db.user.update({
       where: { id: user.userId },
@@ -52,12 +55,16 @@ export async function POST(request: NextRequest) {
         baseUrl,
         apiKey,
         model,
+        confirmModel,
+        llmConfigs,
       },
       select: {
         provider: true,
         baseUrl: true,
         apiKey: true,
         model: true,
+        confirmModel: true,
+        llmConfigs: true,
       },
     })
 

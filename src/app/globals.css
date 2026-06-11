@@ -46,6 +46,10 @@
   }
 }
 
+html {
+  font-size: 125%;
+}
+
 :root {
   --background: #030303;
   --foreground: #f4f4f5;

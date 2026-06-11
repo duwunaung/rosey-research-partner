@@ -8,16 +8,18 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  username  String   @unique
-  password  String   // Hashed password
-  provider  String?  @default("ollama_local")
-  baseUrl   String?  @default("http://localhost:11434")
-  apiKey    String?
-  model     String?  @default("llama3.1")
-  createdAt DateTime @default(now())
-  topics    Topic[]
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  password     String   // Hashed password
+  provider     String?  @default("ollama_local")
+  baseUrl      String?  @default("http://localhost:11434")
+  apiKey       String?
+  model        String?  @default("llama3.1")
+  confirmModel String?  // Optional secondary model for validation
+  llmConfigs   String?  // JSON string storing configs for all providers
+  createdAt    DateTime @default(now())
+  topics       Topic[]
 }
 
 model Topic {

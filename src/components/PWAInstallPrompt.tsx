@@ -41,7 +41,7 @@ export default function PWAInstallPrompt() {
   if (!isVisible) return null
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm glass-panel border-cyber-cyan/35 bg-cyber-dark/95 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-[0_10px_35px_rgba(6,182,212,0.2)] animate-bounce-short">
+    <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm glass-panel border-cyber-cyan/35 bg-cyber-dark/95 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-[0_10px_35px_rgba(6,182,212,0.2)] animate-bounce-short">
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-xl bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan">
           <Download className="w-5 h-5" />
