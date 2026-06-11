@@ -155,25 +155,43 @@ export async function POST(request: NextRequest) {
       // Check for soft 404s or resolution failures in Jina response
       const lowerTitle = parsedTitle.toLowerCase().trim()
       const lowerMarkdown = scrapedMarkdown.toLowerCase()
-      const isShortContent = scrapedMarkdown.length < 800
+      const isShortContent = scrapedMarkdown.length < 1500
+
+      const isHTTPError = scrapedMarkdown.includes("Warning: Target URL returned error")
 
       const isErrorTitle = 
-        lowerTitle === "404 not found" || 
-        lowerTitle === "page not found" || 
-        lowerTitle === "oops! that page can't be found right now." ||
-        lowerTitle === "oops! that page can’t be found right now." ||
-        lowerTitle === "404 error" ||
-        lowerTitle === "error 404" ||
-        lowerTitle === "oops!"
+        lowerTitle === "" ||
+        lowerTitle.includes("404 not found") || 
+        lowerTitle.includes("page not found") || 
+        lowerTitle.includes("oops! that page can't be found") ||
+        lowerTitle.includes("oops! that page can’t be found") ||
+        lowerTitle.includes("404 error") ||
+        lowerTitle.includes("error 404") ||
+        lowerTitle.includes("page is not available") ||
+        lowerTitle.includes("site not found") ||
+        lowerTitle.includes("cloudflare") ||
+        lowerTitle.includes("attention required") ||
+        lowerTitle.includes("just a moment") ||
+        lowerTitle.includes("security check") ||
+        (lowerTitle.includes("oops!") && lowerTitle.length < 20) ||
+        lowerTitle.startsWith("404:")
 
       const hasErrorContent = isShortContent && (
         lowerMarkdown.includes("oops! that page can't be found") ||
         lowerMarkdown.includes("oops! that page can’t be found") ||
         lowerMarkdown.includes("404 not found") ||
-        lowerMarkdown.includes("page not found")
+        lowerMarkdown.includes("page not found") ||
+        lowerMarkdown.includes("godaddy") ||
+        lowerMarkdown.includes("domain parking") ||
+        lowerMarkdown.includes("unregistered domain") ||
+        lowerMarkdown.includes("enable cookies") ||
+        lowerMarkdown.includes("enable javascript") ||
+        lowerMarkdown.includes("checking your browser") ||
+        lowerMarkdown.includes("access denied") ||
+        lowerMarkdown.includes("captcha")
       )
 
-      if (isErrorTitle || hasErrorContent || scrapedMarkdown.length < 150) {
+      if (isHTTPError || isErrorTitle || hasErrorContent || scrapedMarkdown.length < 150) {
         throw new Error("Scraped content appears to be a 404 or soft error page")
       }
     } catch (jinaError: any) {
@@ -210,23 +228,37 @@ export async function POST(request: NextRequest) {
         // Check for soft 404s or resolution failures in fallback response
         const lowerFallbackTitle = parsedTitle.toLowerCase().trim()
         const lowerFallbackText = cleanText.toLowerCase()
-        const isShortFallback = cleanText.length < 600
+        const isShortFallback = cleanText.length < 1000
 
         const isErrorFallbackTitle = 
-          lowerFallbackTitle === "404 not found" || 
-          lowerFallbackTitle === "page not found" || 
-          lowerFallbackTitle === "404 error" ||
-          lowerFallbackTitle === "error 404" ||
-          lowerFallbackTitle === "oops!"
+          lowerFallbackTitle === "" ||
+          lowerFallbackTitle.includes("404 not found") || 
+          lowerFallbackTitle.includes("page not found") || 
+          lowerFallbackTitle.includes("404 error") ||
+          lowerFallbackTitle.includes("error 404") ||
+          lowerFallbackTitle.includes("page is not available") ||
+          lowerFallbackTitle.includes("site not found") ||
+          lowerFallbackTitle.includes("cloudflare") ||
+          lowerFallbackTitle.includes("attention required") ||
+          lowerFallbackTitle.includes("just a moment") ||
+          lowerFallbackTitle.includes("security check")
 
         const hasErrorFallbackContent = isShortFallback && (
           lowerFallbackText.includes("oops! that page can't be found") ||
           lowerFallbackText.includes("oops! that page can’t be found") ||
           lowerFallbackText.includes("page not found") ||
-          lowerFallbackText.includes("404 not found")
+          lowerFallbackText.includes("404 not found") ||
+          lowerFallbackText.includes("godaddy") ||
+          lowerFallbackText.includes("domain parking") ||
+          lowerFallbackText.includes("unregistered domain") ||
+          lowerFallbackText.includes("enable cookies") ||
+          lowerFallbackText.includes("enable javascript") ||
+          lowerFallbackText.includes("checking your browser") ||
+          lowerFallbackText.includes("access denied") ||
+          lowerFallbackText.includes("captcha")
         )
 
-        if (isErrorFallbackTitle || hasErrorFallbackContent || cleanText.length < 100) {
+        if (isErrorFallbackTitle || hasErrorFallbackContent || cleanText.length < 150) {
           throw new Error("Fallback content appears to be a 404 or soft error page")
         }
 
@@ -336,6 +368,7 @@ Your response MUST be a valid JSON object. Do not include markdown wraps or extr
           }
         } catch (confirmError: any) {
           console.warn('Confirming model validation failed:', confirmError.message)
+          const primaryJustification = parsedResults.justification || 'No justification provided.'
           const updatedUrl = await db.watchedUrl.update({
             where: { id: urlId },
             data: {
@@ -343,9 +376,9 @@ Your response MUST be a valid JSON object. Do not include markdown wraps or extr
               summary: parsedResults.summary || 'Summary unavailable.',
               takeaways: parsedResults.takeaways || [],
               score: Number(parsedResults.score) || 5,
-              justification: `[CONFIRMING ERROR]: Validation failed to run (${confirmError.message})`,
+              justification: `${primaryJustification} (Warning: Verification engine failed to run - ${confirmError.message})`,
               publishedDate: parsedResults.publishedDate || null,
-              status: 'FAILED',
+              status: 'COMPLETED',
             },
           })
           return NextResponse.json(updatedUrl)

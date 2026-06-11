@@ -1,4 +1,4 @@
-# 🤖 Nexus Research Partner (v1.5.1)
+# 🤖 Nexus Research Partner (v1.5.2)
 
 > **A premium, state-of-the-art cybernetic research workstation designed to track, scrape, analyze, and synthesize research topics using advanced LLMs and high-fidelity network meshes.**
 

@@ -131,7 +131,7 @@ export default async function LandingPage() {
       <footer className="w-full max-w-7xl mx-auto px-6 py-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 z-10 text-xs text-slate-500 font-mono">
         <span>&copy; 2026 Nexus Research Partner. All rights reserved.</span>
         <div className="flex gap-4">
-          <span>Nexus Research Partner v1.5.1</span>
+          <span>Nexus Research Partner v1.5.2</span>
           <span>&middot;</span>
           <span>MIT License</span>
         </div>
