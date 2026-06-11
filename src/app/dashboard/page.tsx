@@ -700,7 +700,7 @@ export default function DashboardPage() {
           setCustomNotes(data.notes || '')
         }
       } catch (err: any) {
-        console.error(err)
+        console.warn('[INGESTION WARNING]', err.message)
         setUrls(prev => prev.map(u => u.id === item.id ? { ...u, status: 'FAILED' } : u))
         addLog(`[ROBOT: FAILED] Error processing target: ${err.message}`)
       }
@@ -755,7 +755,7 @@ export default function DashboardPage() {
         addLog(`[SYSTEM: DEEP-DIVE] No new citations discovered.`)
       }
     } catch (err: any) {
-      console.error(err)
+      console.warn('[DEEP-DIVE ERROR]', err.message)
       setDeepDiveStatus('FAILED')
       addLog(`[ERROR] Deep-dive initiation failed: ${err.message}`)
     } finally {
@@ -789,7 +789,7 @@ export default function DashboardPage() {
       setActiveAnalysisTab('deepdive')
       addLog(`[SYSTEM: DEEP-DIVE] Deep-dive synthesis compiled successfully!`)
     } catch (err: any) {
-      console.error(err)
+      console.warn('[SYNTHESIS ERROR]', err.message)
       addLog(`[ERROR] Synthesis compilation failed: ${err.message}`)
     } finally {
       setDeepDivingParentId(null)
