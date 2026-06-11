@@ -336,6 +336,7 @@ Your response MUST be a valid JSON object. Do not include markdown wraps or extr
           }
         } catch (confirmError: any) {
           console.warn('Confirming model validation failed:', confirmError.message)
+          const primaryJustification = parsedResults.justification || 'No justification provided.'
           const updatedUrl = await db.watchedUrl.update({
             where: { id: urlId },
             data: {
@@ -343,9 +344,9 @@ Your response MUST be a valid JSON object. Do not include markdown wraps or extr
               summary: parsedResults.summary || 'Summary unavailable.',
               takeaways: parsedResults.takeaways || [],
               score: Number(parsedResults.score) || 5,
-              justification: `[CONFIRMING ERROR]: Validation failed to run (${confirmError.message})`,
+              justification: `${primaryJustification} (Warning: Verification engine failed to run - ${confirmError.message})`,
               publishedDate: parsedResults.publishedDate || null,
-              status: 'FAILED',
+              status: 'COMPLETED',
             },
           })
           return NextResponse.json(updatedUrl)
