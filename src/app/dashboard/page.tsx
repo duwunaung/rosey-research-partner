@@ -8,7 +8,7 @@ import {
   Clock, AlertCircle, RefreshCw, Layers, Brain, Bookmark
 } from 'lucide-react'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas-pro'
 
 interface Topic {
   id: string
@@ -105,6 +105,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const terminalEndRef = useRef<HTMLDivElement>(null)
   const reportRef = useRef<HTMLDivElement>(null)
+  const analysisSidebarRef = useRef<HTMLDivElement>(null)
 
   // Auth / User State
   const [username, setUsername] = useState('Researcher')
@@ -1047,38 +1048,41 @@ export default function DashboardPage() {
             )}
 
             {/* AI Source Recommendations panel */}
-            {suggestions.length > 0 && (
-              <div className="mb-4 p-3 rounded-xl glass-panel border-cyber-indigo/30 bg-cyber-indigo/5 animate-cyber-glow">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] font-mono text-cyber-indigo uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" /> AI Recommended Resources
-                  </span>
-                  <button 
-                    onClick={() => setSuggestions([])} 
-                    className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.map((s, idx) => (
-                    <button
-                      key={idx}
-                      onClick={async () => {
-                        const success = await handleAddUrl(undefined, s.url)
-                        if (success) {
-                          setSuggestions(prev => prev.filter((_, i) => i !== idx))
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-full bg-white/5 border border-white/8 text-slate-300 hover:border-cyber-indigo/50 hover:bg-cyber-indigo/10 text-[10px] font-sans flex items-center gap-1 cursor-pointer transition"
+            {(() => {
+              const visibleSuggestions = suggestions.filter(s => !urls.some(u => u.url === s.url))
+              return visibleSuggestions.length > 0 && (
+                <div className="mb-4 p-3 rounded-xl glass-panel border-cyber-indigo/30 bg-cyber-indigo/5 animate-cyber-glow">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-mono text-cyber-indigo uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> AI Recommended Resources
+                    </span>
+                    <button 
+                      onClick={() => setSuggestions([])} 
+                      className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
                     >
-                      <Plus className="w-2.5 h-2.5 text-cyber-cyan" />
-                      {s.name}
+                      Clear
                     </button>
-                  ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {visibleSuggestions.map((s, idx) => (
+                      <button
+                        key={idx}
+                        onClick={async () => {
+                          const success = await handleAddUrl(undefined, s.url)
+                          if (success) {
+                            setSuggestions(prev => prev.filter((_, i) => i !== idx))
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-full bg-white/5 border border-white/8 text-slate-300 hover:border-cyber-indigo/50 hover:bg-cyber-indigo/10 text-[10px] font-sans flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Plus className="w-2.5 h-2.5 text-cyber-cyan" />
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {loadingUrls ? (
               <div className="flex-1 flex items-center justify-center">
@@ -1105,6 +1109,10 @@ export default function DashboardPage() {
                         if (u.status === 'COMPLETED') {
                           setSelectedUrlDetails(u)
                           setCustomNotes(u.notes || '')
+                          // Auto-scroll to details panel on mobile devices
+                          setTimeout(() => {
+                            analysisSidebarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }, 100)
                         }
                       }}
                       className={`group relative p-3.5 rounded-xl border flex items-center justify-between transition cursor-pointer ${
@@ -1201,7 +1209,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ================= COLUMN 4: ANALYSIS SIDEBAR ================= */}
-        <div className="lg:col-span-1 flex flex-col overflow-hidden lg:min-h-0">
+        <div ref={analysisSidebarRef} className="lg:col-span-1 flex flex-col overflow-hidden lg:min-h-0">
           <div className="glass-panel rounded-2xl flex-1 p-4 flex flex-col overflow-hidden bg-cyber-dark/20 lg:min-h-0 min-h-[400px]">
             <div className="text-xs font-mono uppercase tracking-widest text-slate-400 pb-2 border-b border-white/5 mb-4 flex items-center gap-2">
               <Brain className="w-4 h-4" /> Cognitive Analysis

@@ -112,7 +112,7 @@ export default async function LandingPage() {
           </div>
           <h3 className="font-semibold text-white text-base mb-2">3. Cybernetic Ranker</h3>
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Analyze topics via Ollama Cloud. Sort and prioritize findings by general relevance score.
+            Analyze topics via advanced LLMs. Sort and prioritize findings by general relevance score.
           </p>
         </div>
 
