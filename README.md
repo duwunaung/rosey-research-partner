@@ -56,6 +56,18 @@ graph TD
 
 ---
 
+## 📚 Technical Reference
+
+For an in-depth explanation of the application's underlying cognitive core and scraping flows, consult the detailed **Technical Document** in the repository root. It provides comprehensive technical breakdowns of:
+* **Target Recommendations:** The LLM prompt dynamics used to generate and deduplicate reference suggestions.
+* **Ingestion Core:** How webpages are read, parsed, and token-sliced to secure high-value Markdown.
+* **Cognitive Summarization:** System guidelines and format restraints that govern summary and takeaway outputs.
+* **Scoring Mechanics:** Criteria used to calculate relevance scores (1-10) and justify priorities.
+* **Verification Pipeline:** How the dual-model cross-examination identifies issues and filters results.
+* **Deep-Dive Ingestion:** The multi-stage, serverless-friendly citations queue and Markdown Synthesis compiler.
+
+---
+
 ## 🛠️ Tech Stack
 
 * **Core Framework**: [Next.js 16 (App Router)](https://nextjs.org/) + React 19

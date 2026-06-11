@@ -35,6 +35,8 @@ interface WatchedUrl {
   revisit: boolean
   topicId: string
   createdAt: string
+  parentId?: string | null
+  deepDiveReport?: string | null
 }
 
 interface Suggestion {
