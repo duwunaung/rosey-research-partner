@@ -151,6 +151,31 @@ export async function POST(request: NextRequest) {
       if (titleMatch && titleMatch[1]) {
         parsedTitle = titleMatch[1].trim()
       }
+
+      // Check for soft 404s or resolution failures in Jina response
+      const lowerTitle = parsedTitle.toLowerCase().trim()
+      const lowerMarkdown = scrapedMarkdown.toLowerCase()
+      const isShortContent = scrapedMarkdown.length < 800
+
+      const isErrorTitle = 
+        lowerTitle === "404 not found" || 
+        lowerTitle === "page not found" || 
+        lowerTitle === "oops! that page can't be found right now." ||
+        lowerTitle === "oops! that page can’t be found right now." ||
+        lowerTitle === "404 error" ||
+        lowerTitle === "error 404" ||
+        lowerTitle === "oops!"
+
+      const hasErrorContent = isShortContent && (
+        lowerMarkdown.includes("oops! that page can't be found") ||
+        lowerMarkdown.includes("oops! that page can’t be found") ||
+        lowerMarkdown.includes("404 not found") ||
+        lowerMarkdown.includes("page not found")
+      )
+
+      if (isErrorTitle || hasErrorContent || scrapedMarkdown.length < 150) {
+        throw new Error("Scraped content appears to be a 404 or soft error page")
+      }
     } catch (jinaError: any) {
       console.warn('Jina Reader failed. Direct fetch fallback:', jinaError.message)
       
@@ -181,6 +206,29 @@ export async function POST(request: NextRequest) {
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
+
+        // Check for soft 404s or resolution failures in fallback response
+        const lowerFallbackTitle = parsedTitle.toLowerCase().trim()
+        const lowerFallbackText = cleanText.toLowerCase()
+        const isShortFallback = cleanText.length < 600
+
+        const isErrorFallbackTitle = 
+          lowerFallbackTitle === "404 not found" || 
+          lowerFallbackTitle === "page not found" || 
+          lowerFallbackTitle === "404 error" ||
+          lowerFallbackTitle === "error 404" ||
+          lowerFallbackTitle === "oops!"
+
+        const hasErrorFallbackContent = isShortFallback && (
+          lowerFallbackText.includes("oops! that page can't be found") ||
+          lowerFallbackText.includes("oops! that page can’t be found") ||
+          lowerFallbackText.includes("page not found") ||
+          lowerFallbackText.includes("404 not found")
+        )
+
+        if (isErrorFallbackTitle || hasErrorFallbackContent || cleanText.length < 100) {
+          throw new Error("Fallback content appears to be a 404 or soft error page")
+        }
 
         scrapedMarkdown = `Title: ${parsedTitle}\n\nContent:\n${cleanText}`
       } catch (directError: any) {

@@ -1,117 +1,130 @@
-# 🤖 Nexus Research Partner
+# 🤖 Nexus Research Partner (v1.5.1)
 
-A premium, multi-user web application designed to track, scrape, summarize, and prioritize research topics using **Ollama Cloud** and **Tailwind CSS v4** with a dark glassmorphic design.
+> **A premium, state-of-the-art cybernetic research workstation designed to track, scrape, analyze, and synthesize research topics using advanced LLMs and high-fidelity network meshes.**
+
+Nexus Research Partner combines modern **dark-mode glassmorphism** aesthetics with powerful agentic pipelines to turn unstructured web URLs into a cohesive, prioritized knowledge catalog.
 
 ---
 
-## ✨ Features
+## ⚡ Key Features
 
-- **🔐 Multi-User Authentication**: Register and log in securely. Uses custom JWT sessions stored in secure HTTP-only cookies and hashes passwords with bcrypt.
-- **📁 Topic-Based Workspaces**: Organize your research into distinct topics (e.g. *AI Agents*, *Quantum Computing*, *Web Frameworks*).
-- **💡 AI URL Recommendations**: Stuck on where to start researching? Click "Suggest Sources", and the AI will analyze your topic and recommend 5-6 authoritative articles or official documentation sites.
-- **🕸️ Robotic Web Ingestor**: 
-  - Scrapes target websites via the fast, serverless-friendly **Jina Reader API**.
-  - Bypasses JavaScript-rendering blocks and provides clean markdown formatting.
-- **🧠 Cybernetic Summarizer & Prioritization**: 
-  - Connects to your **Ollama Cloud** (or custom OpenAI-compatible) endpoint.
-  - Automatically summarizes content and extracts key takeaways.
-  - Calculates a general relevance score (1-10) and provides a clear scoring justification.
-  - Auto-sorts your articles on the dashboard by priority.
-- **🎭 Fancy Robotic Scanner UI**: Clicking "Start Research" triggers glowing neon scanlines, card outlines that pulse to indicate scraping states, and a rolling cybernetic terminal showing real-time logs of the AI's state.
-- **📄 High-Fidelity PDF Export**: Compiles summaries, scores, takeaways, and bibliography into a formatted, multi-page PDF report.
+* **🔐 Cyber-Secure Authentication**: Secure password hashing with `bcryptjs` and session tracking using signed JWTs stored in secure, edge-compatible HTTP-only cookies.
+* **📁 Topic-Based Workspaces**: Segment research into modular workspace nodes (e.g., *Quantum Algorithms*, *AI Agents*, *Distributed Databases*).
+* **💡 AI URL Recommendations**: Generate instant, highly relevant documentation and article source suggestions with a single click. Matches against your active watchlist to prevent duplicate additions.
+* **🕸️ Interactive Knowledge Graph / Mesh**: 
+  * Visualize your research database as a dynamic, interactive spring-physics network graph.
+  * Drag-and-drop nodes to explore connections.
+  * Auto-links sub-sources to parent documents, and dynamically maps cross-article links based on title keyword overlaps.
+  * Hover nodes for real-time cognitive metrics.
+* **🔍 Deep-Dive Agentic Scraper**: 
+  * Trigger autonomous citation deep-dives on researched articles.
+  * The agent reads the page, discovers critical sub-concepts, scrapes those sub-sources, and compiles a comprehensive **Markdown Synthesis Report** highlighting convergences and contradictions.
+* **🧠 Prioritization Engine**: Scrapes clean Markdown content via the **Jina Reader API**, summarizes articles, extracts actionable takeaways, and calculates relevance scores (1-10) with detailed justifications using your configured LLM cores.
+* **🎭 Futuristic Live Console**: Watch the AI work in real-time through the scrolling Terminal feed, complete with scanline shaders, pulsing state indicators, and glowing telemetry text.
+* **📄 Document Digest Compiler**: Compile and download your research summaries, takeaways, scores, and bibliography into a print-ready, multi-page A4 PDF.
+* **📱 Progressive Web App (PWA)**: Installable directly to your mobile device or desktop with an offline service worker. Forces landscape orientation on installed PWAs and prompts portrait orientation rotate warnings in browser viewports.
+
+---
+
+## 📐 Architecture & System Flow
+
+```mermaid
+graph TD
+    User([Researcher]) -->|Access Terminal| WebUI[Next.js App UI]
+    WebUI -->|Workspace Management| API_Topics[Topic & URL API]
+    API_Topics -->|Sync Schema| DB[(Neon Serverless Postgres)]
+    
+    %% Research Pipeline
+    WebUI -->|Start Ingest| API_Research[Research API Route]
+    API_Research -->|Scrape Markdown| Jina[Jina Reader Scraper]
+    Jina -->|Raw Markdown| API_Research
+    API_Research -->|Query Summary & Score| PrimaryLLM[Primary LLM Core]
+    API_Research -->|Optional Cross-Examination| ConfirmLLM[Confirming LLM Core]
+    PrimaryLLM & ConfirmLLM -->|Save Results| DB
+    
+    %% Deep Dive
+    WebUI -->|Deep Dive Click| API_DeepDive[Deep-Dive API Routes]
+    API_DeepDive -->|Extract Citations| PrimaryLLM
+    API_DeepDive -->|Insert Sub-sources| DB
+    API_DeepDive -->|Synthesize Mesh| DB
+    API_DeepDive -->|Markdown Report| WebUI
+    
+    %% Network Mesh
+    DB -->|Retrieve Node Catalog| WebUI
+    WebUI -->|Compute Keyword Overlaps| Graph[Spring-Physics Network Graph]
+```
+
+---
+
+## 📚 Technical Reference
+
+For an in-depth explanation of the application's underlying cognitive core and scraping flows, consult the detailed **Technical Document** in the repository root. It provides comprehensive technical breakdowns of:
+* **Target Recommendations:** The LLM prompt dynamics used to generate and deduplicate reference suggestions.
+* **Ingestion Core:** How webpages are read, parsed, and token-sliced to secure high-value Markdown.
+* **Cognitive Summarization:** System guidelines and format restraints that govern summary and takeaway outputs.
+* **Scoring Mechanics:** Criteria used to calculate relevance scores (1-10) and justify priorities.
+* **Verification Pipeline:** How the dual-model cross-examination identifies issues and filters results.
+* **Deep-Dive Ingestion:** The multi-stage, serverless-friendly citations queue and Markdown Synthesis compiler.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Next.js (App Router)](https://nextjs.org/) + React 19
-- **Database**: [Neon Serverless Postgres](https://neon.tech/)
-- **ORM**: [Prisma ORM](https://www.prisma.io/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) (Dark Mode Glassmorphism Theme)
-- **Security**: JWT (`jose`), `bcryptjs`, and Next.js Middleware guards
-- **Scraper**: [Jina Reader API](https://jina.ai/)
-- **LLM API**: OpenAI-compatible API client connecting to **Ollama Cloud**
-- **PDF Compiler**: `jsPDF` + `html2canvas`
+* **Core Framework**: [Next.js 16 (App Router)](https://nextjs.org/) + React 19
+* **Database Engine**: [Neon Serverless Postgres](https://neon.tech/) (PostgreSQL)
+* **Object-Relational Mapping (ORM)**: [Prisma ORM v6](https://www.prisma.io/)
+* **Aesthetic Styling**: [Tailwind CSS v4](https://tailwindcss.com/) (Custom keyframe scanline, hover pulses, and glassmorphic panels)
+* **Auth & Cryptography**: JWT (`jose`) and password hashing (`bcryptjs`)
+* **Scraper Core**: [Jina Reader API](https://jina.ai/)
+* **Document Compilation**: `jspdf` and `html2canvas-pro` (Fully supports modern Tailwind v4 OKLab/OKLCh colors)
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Installation & Local Launch
 
-### 1. Prerequisites
-- [Node.js](https://nodejs.org/) (v18.x or higher)
-- A [Neon Postgres](https://neon.tech/) account (free database URL)
-- Access to your **Ollama Cloud** (or OpenAI-compatible) endpoint and API key.
-
-### 2. Installation
-Clone the repository and install dependencies:
+### 1. Clone & Install Dependencies
+Clone this repository to your local directory and run install:
 ```bash
 npm install
 ```
 
-### 3. Environment Setup
-Create a `.env` file in the root of the project and add the following keys:
-
+### 2. Environment Configuration
+Create a `.env` file in the root directory:
 ```env
-# Database connection (Neon Postgres connection string)
-DATABASE_URL="postgresql://user:password@ep-xxxx-xxxx.us-east-2.aws.neon.tech/neondb?sslmode=require"
+# Neon Postgres Connection String
+DATABASE_URL="postgresql://user:password@ep-xxxx-xxxx.us-east-1.aws.neon.tech/neondb?sslmode=require"
 
-# Session JWT secret (used to sign user auth cookies)
-JWT_SECRET="generate-a-secure-random-string-here"
+# JWT Encryption Key (Ensure this is a strong random secret in production)
+JWT_SECRET="nexus-secure-jwt-session-encryption-secret-string"
 ```
 
-### 4. Database Setup & Migrations
-Initialize the Neon database schema with Prisma:
+### 3. Sync Database Schema & Generate Models
+Push models to your Postgres database and generate the Prisma client:
 ```bash
-# Push the schema structure to your Neon database
 npx prisma db push
-
-# Generate the Prisma Client
 npx prisma generate
 ```
 
-### 5. Running Locally
-Start the development server:
+### 4. Run Development Workspace
+Start the Next.js local server:
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) to access the command terminal.
 
 ---
 
-## 📂 Project Structure
+## 📡 LLM Provider Configuration
 
-```text
-├── prisma/
-│   └── schema.prisma        # Database models (User, Topic, WatchedUrl)
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── auth/        # Login/Register API endpoints
-│   │   │   ├── research/    # Scraper & Ollama LLM processor routes
-│   │   │   └── suggestions/ # AI URL recommendations generator
-│   │   ├── dashboard/       # Main workspace and robotic research hub
-│   │   ├── login/           # Flip-card authentication screen
-│   │   ├── globals.css      # Custom animations, variables & Tailwind setup
-│   │   ├── layout.tsx       # Root document layout with fonts
-│   │   └── page.tsx         # Welcome / Landing page
-│   ├── components/          # Reusable glassmorphic UI elements
-│   ├── lib/                 # Utility files (db connection, auth helpers)
-│   └── middleware.ts        # Guard for dashboard and secure API paths
-├── package.json
-└── README.md
-```
+Nexus supports saved, concurrent configuration states for multiple LLM providers:
+1. **Ollama Local**: Direct connections to your local `http://localhost:11434` instance.
+2. **Ollama Cloud**: Cloud-hosted instances using API keys.
+3. **Groq**: High-speed inference cores.
+4. **OpenRouter**: Unified access to top models.
 
----
-
-## 📡 API Configuration
-To configure the AI research partner, open the **Settings** drawer in the dashboard and input:
-1. **Ollama Cloud Base URL** (e.g., `https://api.ollamacloud.com/v1` or your custom server/tunnel URL).
-2. **Ollama API Key**.
-3. **Model Name** (e.g., `llama3.1`, `mistral`).
-
-These credentials are saved locally in your browser's `localStorage` and never sent to any server other than your designated Ollama Cloud endpoint.
+Open the **Settings** panel (cog icon in top-right navbar) to configure provider URLs, API credentials, and target models. Nexus supports typing custom model names or selecting common presets.
 
 ---
 
 ## 📄 License
-This project is open-source and available under the [MIT License](LICENSE).
+This project is open-source software licensed under the [MIT License](LICENSE).
