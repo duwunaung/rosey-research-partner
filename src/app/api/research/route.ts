@@ -151,6 +151,22 @@ export async function POST(request: NextRequest) {
       if (titleMatch && titleMatch[1]) {
         parsedTitle = titleMatch[1].trim()
       }
+
+      // Check for soft 404s or resolution failures in Jina response
+      const lowerTitle = parsedTitle.toLowerCase()
+      const lowerMarkdown = scrapedMarkdown.toLowerCase()
+      if (
+        lowerTitle.includes("oops!") ||
+        lowerTitle.includes("page not found") ||
+        lowerTitle.includes("404") ||
+        lowerMarkdown.includes("oops! that page can't be found") ||
+        lowerMarkdown.includes("oops! that page can’t be found") ||
+        lowerMarkdown.includes("page not found") ||
+        lowerMarkdown.includes("404 not found") ||
+        scrapedMarkdown.length < 150
+      ) {
+        throw new Error("Scraped content appears to be a 404 or soft error page")
+      }
     } catch (jinaError: any) {
       console.warn('Jina Reader failed. Direct fetch fallback:', jinaError.message)
       
@@ -181,6 +197,20 @@ export async function POST(request: NextRequest) {
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
+
+        // Check for soft 404s or resolution failures in fallback response
+        const lowerFallbackTitle = parsedTitle.toLowerCase()
+        const lowerFallbackText = cleanText.toLowerCase()
+        if (
+          lowerFallbackTitle.includes("oops!") ||
+          lowerFallbackTitle.includes("page not found") ||
+          lowerFallbackTitle.includes("404") ||
+          lowerFallbackText.includes("oops! that page can't be found") ||
+          lowerFallbackText.includes("oops! that page can’t be found") ||
+          cleanText.length < 100
+        ) {
+          throw new Error("Fallback content appears to be a 404 or soft error page")
+        }
 
         scrapedMarkdown = `Title: ${parsedTitle}\n\nContent:\n${cleanText}`
       } catch (directError: any) {
