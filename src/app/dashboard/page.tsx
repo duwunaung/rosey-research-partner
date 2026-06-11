@@ -138,7 +138,10 @@ export default function DashboardPage() {
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('llama3.1')
-  const [allConfigs, setAllConfigs] = useState<Record<string, { baseUrl: string, apiKey: string, model: string }>>({})
+  const [confirmModel, setConfirmModel] = useState('')
+  const [isPrimaryCustomActive, setIsPrimaryCustomActive] = useState(false)
+  const [isConfirmCustomActive, setIsConfirmCustomActive] = useState(false)
+  const [allConfigs, setAllConfigs] = useState<Record<string, { baseUrl: string, apiKey: string, model: string, confirmModel?: string }>>({})
 
   // Robotic Research Execution State
   const [researching, setResearching] = useState(false)
@@ -160,11 +163,19 @@ export default function DashboardPage() {
       const res = await fetch('/api/user/config')
       if (res.ok) {
         const data = await res.json()
+        if (data.username) {
+          setUsername(data.username)
+        }
         if (data.provider) {
           setProvider(data.provider)
           setBaseUrl(data.baseUrl || '')
           setApiKey(data.apiKey || '')
           setModel(data.model || '')
+          setConfirmModel(data.confirmModel || '')
+          
+          const presets = PROVIDER_MODELS[data.provider] || []
+          setIsPrimaryCustomActive(data.model ? !presets.includes(data.model) : false)
+          setIsConfirmCustomActive(data.confirmModel ? !presets.includes(data.confirmModel) : false)
           
           let parsedConfigs = {}
           if (data.llmConfigs) {
@@ -181,6 +192,7 @@ export default function DashboardPage() {
           localStorage.setItem('nexus_baseUrl', data.baseUrl || '')
           localStorage.setItem('nexus_apiKey', data.apiKey || '')
           localStorage.setItem('nexus_model', data.model || '')
+          localStorage.setItem('nexus_confirm_model', data.confirmModel || '')
           if (data.llmConfigs) {
             localStorage.setItem('nexus_all_configs', data.llmConfigs)
           }
@@ -196,12 +208,22 @@ export default function DashboardPage() {
     const savedBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl')
     const savedApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey')
     const savedModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model')
+    const savedConfirmModel = localStorage.getItem('nexus_confirm_model')
     const savedAllConfigs = localStorage.getItem('nexus_all_configs')
     
     setProvider(savedProvider)
     setBaseUrl(savedBaseUrl || PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
     setApiKey(savedApiKey || '')
-    setModel(savedModel || PROVIDER_PRESETS[savedProvider]?.model || '')
+    
+    const activeModel = savedModel || PROVIDER_PRESETS[savedProvider]?.model || ''
+    setModel(activeModel)
+    
+    const activeConfirm = savedConfirmModel || ''
+    setConfirmModel(activeConfirm)
+    
+    const presets = PROVIDER_MODELS[savedProvider] || []
+    setIsPrimaryCustomActive(activeModel ? !presets.includes(activeModel) : false)
+    setIsConfirmCustomActive(activeConfirm ? !presets.includes(activeConfirm) : false)
     
     if (savedAllConfigs) {
       try {
@@ -214,7 +236,7 @@ export default function DashboardPage() {
     // 1. Save current form values of the previous provider to our local map
     const updatedConfigs = {
       ...allConfigs,
-      [provider]: { baseUrl, apiKey, model }
+      [provider]: { baseUrl, apiKey, model, confirmModel }
     }
     setAllConfigs(updatedConfigs)
     localStorage.setItem('nexus_all_configs', JSON.stringify(updatedConfigs))
@@ -228,6 +250,13 @@ export default function DashboardPage() {
     // Set model from nextConfig, fallback to presets
     const nextModel = nextConfig.model || PROVIDER_PRESETS[newProvider]?.model || ''
     setModel(nextModel)
+
+    const nextConfirmModel = nextConfig.confirmModel || ''
+    setConfirmModel(nextConfirmModel)
+
+    const presets = PROVIDER_MODELS[newProvider] || []
+    setIsPrimaryCustomActive(nextModel ? !presets.includes(nextModel) : false)
+    setIsConfirmCustomActive(nextConfirmModel ? !presets.includes(nextConfirmModel) : false)
   }
 
   useEffect(() => {
@@ -246,7 +275,7 @@ export default function DashboardPage() {
     // Update local state map with current inputs
     const updatedConfigs = {
       ...allConfigs,
-      [provider]: { baseUrl, apiKey, model }
+      [provider]: { baseUrl, apiKey, model, confirmModel }
     }
     setAllConfigs(updatedConfigs)
     
@@ -255,6 +284,7 @@ export default function DashboardPage() {
     localStorage.setItem('nexus_baseUrl', baseUrl)
     localStorage.setItem('nexus_apiKey', apiKey)
     localStorage.setItem('nexus_model', model)
+    localStorage.setItem('nexus_confirm_model', confirmModel)
     localStorage.setItem('nexus_all_configs', JSON.stringify(updatedConfigs))
     
     setIsSettingsOpen(false)
@@ -270,6 +300,7 @@ export default function DashboardPage() {
           baseUrl, 
           apiKey, 
           model,
+          confirmModel,
           llmConfigs: JSON.stringify(updatedConfigs)
         }),
       })
@@ -459,10 +490,10 @@ export default function DashboardPage() {
     }
   }
 
-  const handleAddUrl = async (e?: React.FormEvent, urlToAdd?: string) => {
+  const handleAddUrl = async (e?: React.FormEvent, urlToAdd?: string): Promise<boolean> => {
     if (e) e.preventDefault()
     const targetUrl = urlToAdd || newUrlInput
-    if (!targetUrl.trim() || !selectedTopic) return
+    if (!targetUrl.trim() || !selectedTopic) return false
     setAddingUrl(true)
 
     try {
@@ -481,8 +512,10 @@ export default function DashboardPage() {
       setUrls(prev => [newWatched, ...prev])
       if (!urlToAdd) setNewUrlInput('')
       addLog(`[SYSTEM] URL added to watchlist: ${targetUrl}`)
+      return true
     } catch (err: any) {
       alert(err.message)
+      return false
     } finally {
       setAddingUrl(false)
     }
@@ -598,15 +631,22 @@ export default function DashboardPage() {
     }
   }
 
-  const runPipeline = async (urlItems: WatchedUrl[], customBaseUrl?: string, customApiKey?: string, customModel?: string) => {
+  const runPipeline = async (
+    urlItems: WatchedUrl[], 
+    customBaseUrl?: string, 
+    customApiKey?: string, 
+    customModel?: string,
+    customConfirmModel?: string
+  ) => {
     setResearching(true)
     setTerminalLogs([])
     const activeBaseUrl = customBaseUrl || baseUrl
     const activeApiKey = customApiKey || apiKey
     const activeModel = customModel || model
+    const activeConfirmModel = customConfirmModel !== undefined ? customConfirmModel : confirmModel
 
     addLog(`[SYSTEM: BOOT] Starting cybernetic ingestion engine...`)
-    addLog(`[SYSTEM: CONFIG] LLM: ${activeModel} | Scraper: Jina Reader API`)
+    addLog(`[SYSTEM: CONFIG] LLM: ${activeModel}${activeConfirmModel ? ` (Verify: ${activeConfirmModel})` : ''} | Scraper: Jina Reader API`)
 
     for (let i = 0; i < urlItems.length; i++) {
       const item = urlItems[i]
@@ -623,7 +663,12 @@ export default function DashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             urlId: item.id,
-            config: { baseUrl: activeBaseUrl, apiKey: activeApiKey, model: activeModel }
+            config: { 
+              baseUrl: activeBaseUrl, 
+              apiKey: activeApiKey, 
+              model: activeModel,
+              confirmModel: activeConfirmModel
+            }
           })
         })
 
@@ -686,48 +731,55 @@ export default function DashboardPage() {
 
     try {
       // Small delay to allow react to render the hidden print block if needed
-      setTimeout(async () => {
-        const printArea = reportRef.current
-        if (!printArea) return
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      const printArea = reportRef.current
+      if (!printArea) {
+        throw new Error('Print digest container not found.')
+      }
 
-        const canvas = await html2canvas(printArea, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#0a0a0c',
-        })
+      const canvas = await html2canvas(printArea, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#0a0a0c',
+      })
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.95)
-        const pdf = new jsPDF('p', 'mm', 'a4')
-        const imgWidth = 210 // A4 size
-        const pageHeight = 295
-        const imgHeight = (canvas.height * imgWidth) / canvas.width
-        let heightLeft = imgHeight
-        let position = 0
+      const canvasWidth = canvas.width || 800
+      const canvasHeight = canvas.height || 1
+      const imgWidth = 210 // A4 size
+      const pageHeight = 295
+      const imgHeight = (canvasHeight * imgWidth) / canvasWidth
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      let heightLeft = imgHeight
+      let position = 0
 
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      let safetyMargin = 0
+      while (heightLeft >= 0 && safetyMargin < 50) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
         heightLeft -= pageHeight
+        safetyMargin++
+      }
 
-        while (heightLeft >= 0) {
-          position = heightLeft - imgHeight
-          pdf.addPage()
-          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
-          heightLeft -= pageHeight
-        }
-
-        const safeTitle = selectedTopic.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-        pdf.save(`research-digest-${safeTitle}.pdf`)
-        addLog(`[SYSTEM] PDF downloaded successfully.`)
-        setExportingPdf(false)
-      }, 500)
+      const safeTitle = selectedTopic.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      pdf.save(`research-digest-${safeTitle}.pdf`)
+      addLog(`[SYSTEM] PDF downloaded successfully.`)
     } catch (err: any) {
       console.error(err)
       addLog(`[ERROR] PDF compilation failed: ${err.message}`)
+    } finally {
       setExportingPdf(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto lg:overflow-hidden bg-black text-[#f4f4f5]">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen flex flex-col relative overflow-y-auto lg:overflow-hidden bg-black text-[#f4f4f5]">
       {/* Background cyber grid */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
 
@@ -736,7 +788,7 @@ export default function DashboardPage() {
       <div className="absolute bottom-0 left-1/4 w-[450px] h-[450px] rounded-full bg-cyber-cyan/8 blur-[130px] pointer-events-none" />
 
       {/* Top Navbar */}
-      <nav className="z-20 w-full px-6 py-4 glass-panel border-b border-white/5 flex justify-between items-center bg-cyber-dark/40">
+      <nav className="sticky top-0 z-25 w-full px-6 py-4 glass-panel border-b border-white/5 flex justify-between items-center bg-cyber-dark/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl glass-panel border-cyber-indigo/30 bg-cyber-dark/30 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
             <Shield className="w-5 h-5 text-cyber-cyan" />
@@ -746,7 +798,12 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/5 bg-white/2 text-[10px] font-mono text-slate-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyber-emerald animate-pulse" />
+            OPERATOR: <span className="text-white font-bold">{username}</span>
+          </div>
+
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 rounded-lg glass-panel hover:bg-white/5 hover:border-cyber-cyan/40 transition cursor-pointer text-slate-400 hover:text-cyber-cyan"
@@ -765,10 +822,10 @@ export default function DashboardPage() {
       </nav>
 
       {/* Main Grid Layout */}
-      <div className="flex-1 w-full max-w-[1700px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6 z-10 lg:overflow-hidden overflow-visible">
+      <div className="flex-1 w-full max-w-[1700px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6 z-10 lg:overflow-hidden overflow-visible lg:min-h-0">
         
         {/* ================= COLUMN 1: TOPIC DIRECTORY ================= */}
-        <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden">
+        <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden lg:min-h-0">
           <div className="glass-panel rounded-2xl p-4 flex flex-col h-[300px] bg-cyber-dark/25">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
               <span className="text-xs font-mono uppercase tracking-widest text-slate-400 flex items-center gap-2">
@@ -855,7 +912,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ================= COLUMN 2 & 3: WATCHLIST HUB ================= */}
-        <div className="lg:col-span-2 flex flex-col gap-4 overflow-hidden">
+        <div className="lg:col-span-2 flex flex-col gap-4 overflow-hidden lg:min-h-0">
           
           {/* Active Topic Header / Controls */}
           <div className="glass-panel rounded-2xl p-4 bg-cyber-dark/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
@@ -1007,7 +1064,12 @@ export default function DashboardPage() {
                   {suggestions.map((s, idx) => (
                     <button
                       key={idx}
-                      onClick={() => handleAddUrl(undefined, s.url)}
+                      onClick={async () => {
+                        const success = await handleAddUrl(undefined, s.url)
+                        if (success) {
+                          setSuggestions(prev => prev.filter((_, i) => i !== idx))
+                        }
+                      }}
                       className="px-2.5 py-1 rounded-full bg-white/5 border border-white/8 text-slate-300 hover:border-cyber-indigo/50 hover:bg-cyber-indigo/10 text-[10px] font-sans flex items-center gap-1 cursor-pointer transition"
                     >
                       <Plus className="w-2.5 h-2.5 text-cyber-cyan" />
@@ -1139,8 +1201,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ================= COLUMN 4: ANALYSIS SIDEBAR ================= */}
-        <div className="lg:col-span-1 flex flex-col overflow-hidden">
-          <div className="glass-panel rounded-2xl flex-1 p-4 flex flex-col overflow-hidden bg-cyber-dark/20 min-h-[400px]">
+        <div className="lg:col-span-1 flex flex-col overflow-hidden lg:min-h-0">
+          <div className="glass-panel rounded-2xl flex-1 p-4 flex flex-col overflow-hidden bg-cyber-dark/20 lg:min-h-0 min-h-[400px]">
             <div className="text-xs font-mono uppercase tracking-widest text-slate-400 pb-2 border-b border-white/5 mb-4 flex items-center gap-2">
               <Brain className="w-4 h-4" /> Cognitive Analysis
             </div>
@@ -1249,10 +1311,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full max-w-[1700px] mx-auto px-6 py-4 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 z-10 text-xs text-slate-500 font-mono">
-        <span>&copy; 2026 Nexus Research Partner. All rights reserved.</span>
-        <div className="flex gap-4">
-          <span>Nexus Research Partner v1.0.1</span>
+      <footer className="lg:hidden w-full px-6 py-3 border-t border-white/5 flex flex-col gap-1.5 items-center z-10 text-[10px] text-slate-500 font-mono bg-[#050508]/50">
+        <span>&copy; 2026 Nexus Research Partner</span>
+        <div className="flex gap-3 text-slate-600">
+          <span>v1.0.1</span>
           <span>&middot;</span>
           <span>MIT License</span>
         </div>
@@ -1323,19 +1385,23 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">LLM Model Name</label>
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">LLM Model Name (Research)</label>
                   {(() => {
                     const presets = PROVIDER_MODELS[provider] || []
-                    const isCustomModel = presets.length === 0 || !presets.includes(model)
+                    const isPresetModel = presets.includes(model)
+                    const showCustomField = isPrimaryCustomActive || (model !== '' && !isPresetModel)
+                    
                     return presets.length > 0 ? (
                       <div className="space-y-2">
                         <select
-                          value={isCustomModel ? 'custom' : model}
+                          value={showCustomField ? 'custom' : model}
                           onChange={(e) => {
                             const val = e.target.value
                             if (val === 'custom') {
+                              setIsPrimaryCustomActive(true)
                               setModel('')
                             } else {
+                              setIsPrimaryCustomActive(false)
                               setModel(val)
                             }
                           }}
@@ -1350,7 +1416,7 @@ export default function DashboardPage() {
                             Custom model name...
                           </option>
                         </select>
-                        {isCustomModel && (
+                        {showCustomField && (
                           <input
                             type="text"
                             value={model}
@@ -1372,6 +1438,69 @@ export default function DashboardPage() {
                   })()}
                   <p className="text-[10px] text-slate-500 font-mono">
                     {PROVIDER_PRESETS[provider]?.helpText || 'Verify the model is deployed on the instance.'}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-mono uppercase tracking-widest text-slate-400">Confirming Model (Optional)</label>
+                  {(() => {
+                    const presets = PROVIDER_MODELS[provider] || []
+                    const isPresetModel = presets.includes(confirmModel)
+                    const showCustomField = isConfirmCustomActive || (confirmModel !== '' && !isPresetModel)
+                    
+                    return presets.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={confirmModel === '' ? 'none' : (showCustomField ? 'custom' : confirmModel)}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            if (val === 'none') {
+                              setIsConfirmCustomActive(false)
+                              setConfirmModel('')
+                            } else if (val === 'custom') {
+                              setIsConfirmCustomActive(true)
+                              setConfirmModel('')
+                            } else {
+                              setIsConfirmCustomActive(false)
+                              setConfirmModel(val)
+                            }
+                          }}
+                          className="w-full px-4 py-2.5 glass-input text-sm bg-cyber-dark text-slate-200 border border-white/10 rounded-lg focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                        >
+                          <option value="none" className="bg-[#0f0f15] text-slate-400">
+                            None (Research only)
+                          </option>
+                          {presets.map((m) => (
+                            <option key={m} value={m} className="bg-[#0f0f15] text-slate-200">
+                              {m}
+                            </option>
+                          ))}
+                          <option value="custom" className="bg-[#0f0f15] text-slate-200">
+                            Custom model name...
+                          </option>
+                        </select>
+                        {showCustomField && (
+                          <input
+                            type="text"
+                            value={confirmModel}
+                            onChange={(e) => setConfirmModel(e.target.value)}
+                            placeholder="Enter custom confirming model name"
+                            className="w-full px-4 py-2.5 glass-input text-sm"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={confirmModel}
+                        onChange={(e) => setConfirmModel(e.target.value)}
+                        placeholder="e.g. llama3.1 (leave blank for none)"
+                        className="w-full px-4 py-2.5 glass-input text-sm"
+                      />
+                    )
+                  })()}
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Used to approve/reject the relevance of scraped content.
                   </p>
                 </div>
               </div>

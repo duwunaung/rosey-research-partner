@@ -8,6 +8,81 @@ async function getAuthenticatedUser(request: NextRequest) {
   return verifyJWT(token)
 }
 
+async function queryLLM({
+  baseUrl,
+  apiKey,
+  model,
+  messages,
+  isOllamaNative
+}: {
+  baseUrl: string
+  apiKey: string
+  model: string
+  messages: any[]
+  isOllamaNative: boolean
+}) {
+  let llmUrl = ''
+  let requestBody: any = {}
+
+  if (isOllamaNative) {
+    const baseEndpoint = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`
+    llmUrl = `${baseEndpoint}/chat`
+    requestBody = {
+      model,
+      messages,
+      stream: false,
+      format: 'json',
+    }
+  } else {
+    let formattedBaseUrl = baseUrl
+    if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
+      formattedBaseUrl = `${formattedBaseUrl}/v1`
+    }
+    llmUrl = `${formattedBaseUrl}/chat/completions`
+    requestBody = {
+      model,
+      messages,
+      response_format: { type: 'json_object' },
+      temperature: 0.2,
+    }
+  }
+
+  const llmHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (apiKey) {
+    llmHeaders['Authorization'] = `Bearer ${apiKey}`
+  }
+
+  const llmResponse = await fetch(llmUrl, {
+    method: 'POST',
+    headers: llmHeaders,
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(60000), // 60s timeout
+  })
+
+  if (!llmResponse.ok) {
+    throw new Error(`LLM returned status: ${llmResponse.status}`)
+  }
+
+  const llmData = await llmResponse.json()
+  let rawJsonText = ''
+
+  if (isOllamaNative) {
+    rawJsonText = llmData.message?.content?.trim() || ''
+  } else {
+    rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
+  }
+
+  if (rawJsonText.startsWith('```json')) {
+    rawJsonText = rawJsonText.replace(/^```json/, '').replace(/```$/, '').trim()
+  } else if (rawJsonText.startsWith('```')) {
+    rawJsonText = rawJsonText.replace(/^```/, '').replace(/```$/, '').trim()
+  }
+
+  return JSON.parse(rawJsonText)
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthenticatedUser(request)
   if (!user) {
@@ -21,10 +96,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing URL ID or configuration' }, { status: 400 })
     }
 
-    const { baseUrl, apiKey, model } = config
+    const { baseUrl, apiKey, model, confirmModel } = config
     const cleanBaseUrl = baseUrl?.trim() || ''
     const cleanApiKey = apiKey?.trim() || ''
     const cleanModel = model?.trim() || ''
+    const cleanConfirmModel = confirmModel?.trim() || ''
 
     if (!cleanBaseUrl || !cleanModel) {
       return NextResponse.json({ error: 'Missing LLM Base URL or Model configuration' }, { status: 400 })
@@ -55,7 +131,6 @@ export async function POST(request: NextRequest) {
 
     try {
       // 2. Call Jina Reader API to fetch and parse page content
-      // Jina converts any URL to a clean LLM-friendly markdown format
       const scrapeUrl = `https://r.jina.ai/${urlItem.url}`
       
       const scrapeResponse = await fetch(scrapeUrl, {
@@ -63,7 +138,6 @@ export async function POST(request: NextRequest) {
         headers: {
           'Accept': 'text/markdown',
         },
-        // Set a 25-second timeout for scraping to prevent lockups
         signal: AbortSignal.timeout(25000),
       })
 
@@ -73,23 +147,21 @@ export async function POST(request: NextRequest) {
 
       scrapedMarkdown = await scrapeResponse.text()
 
-      // Simple extraction of title from Jina markdown header if available
       const titleMatch = scrapedMarkdown.match(/^Title:\s*(.*)$/m)
       if (titleMatch && titleMatch[1]) {
         parsedTitle = titleMatch[1].trim()
       }
     } catch (jinaError: any) {
-      console.warn('Jina Reader failed or timed out. Initiating direct fetch fallback:', jinaError.message)
+      console.warn('Jina Reader failed. Direct fetch fallback:', jinaError.message)
       
       try {
-        // Fallback to direct HTTP fetch
         const directResponse = await fetch(urlItem.url, {
           method: 'GET',
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
-          signal: AbortSignal.timeout(20000), // 20-second timeout for direct fallback
+          signal: AbortSignal.timeout(20000),
         })
 
         if (!directResponse.ok) {
@@ -97,33 +169,28 @@ export async function POST(request: NextRequest) {
         }
 
         const html = await directResponse.text()
-
-        // Extract title
         const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
         if (titleMatch && titleMatch[1]) {
           parsedTitle = titleMatch[1].trim().replace(/\s+/g, ' ')
         }
 
-        // Clean HTML to text
         let cleanText = html
           .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
           .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
           .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
-          .replace(/<[^>]+>/g, ' ') // Strip remaining HTML tags
-          .replace(/\s+/g, ' ')     // Normalize whitespaces
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
           .trim()
 
         scrapedMarkdown = `Title: ${parsedTitle}\n\nContent:\n${cleanText}`
       } catch (directError: any) {
-        console.error('Direct fetch fallback also failed:', directError.message)
-        
         await db.watchedUrl.update({
           where: { id: urlId },
           data: { status: 'FAILED' },
         })
         
         return NextResponse.json({ 
-          error: `Scraping failed: Jina Timeout (${jinaError.message}) & Fallback Direct Fetch Failed (${directError.message})` 
+          error: `Scraping failed: Jina (${jinaError.message}) & Fallback (${directError.message})` 
         }, { status: 502 })
       }
     }
@@ -133,13 +200,12 @@ export async function POST(request: NextRequest) {
       where: { id: urlId },
       data: { 
         status: 'SUMMARIZING',
-        title: parsedTitle // Save title from scraper if found
+        title: parsedTitle
       },
     })
 
-    // 3. Connect to Ollama Cloud/OpenAI-compatible endpoint
+    // 3. Connect to Ollama/OpenAI-compatible endpoint
     try {
-      // Clean content to avoid exceeding token limit (max 12000 chars of source text)
       const sanitizedContent = scrapedMarkdown.slice(0, 12000)
 
       const systemPrompt = `You are Nexus Research Partner, a cybernetic research assistant.
@@ -161,66 +227,82 @@ Your output MUST be a valid JSON object. Do not include markdown wraps like \`\`
       let formattedBaseUrl = cleanBaseUrl.replace(/\/$/, '')
       const isOllamaNative = formattedBaseUrl.endsWith('/api') || formattedBaseUrl.includes('ollama.com')
       
-      let llmUrl = ''
-      let requestBody: any = {}
-
-      if (isOllamaNative) {
-        const baseEndpoint = formattedBaseUrl.endsWith('/api') ? formattedBaseUrl : `${formattedBaseUrl}/api`
-        llmUrl = `${baseEndpoint}/chat`
-        requestBody = {
-          model: cleanModel,
-          messages: messages,
-          stream: false,
-          format: 'json',
-        }
-      } else {
-        if (!formattedBaseUrl.endsWith('/v1') && !formattedBaseUrl.endsWith('/api') && !formattedBaseUrl.includes('/v1/') && !formattedBaseUrl.includes('/api/')) {
-          formattedBaseUrl = `${formattedBaseUrl}/v1`
-        }
-        llmUrl = `${formattedBaseUrl}/chat/completions`
-        requestBody = {
-          model: cleanModel,
-          messages: messages,
-          response_format: { type: 'json_object' },
-          temperature: 0.2,
-        }
-      }
-      
-      const llmHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      if (cleanApiKey) {
-        llmHeaders['Authorization'] = `Bearer ${cleanApiKey}`
-      }
-
-      const llmResponse = await fetch(llmUrl, {
-        method: 'POST',
-        headers: llmHeaders,
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(60000), // 60s timeout for LLM call
+      // Call primary model
+      const parsedResults = await queryLLM({
+        baseUrl: formattedBaseUrl,
+        apiKey: cleanApiKey,
+        model: cleanModel,
+        messages,
+        isOllamaNative
       })
 
-      if (!llmResponse.ok) {
-        throw new Error(`LLM endpoint returned status: ${llmResponse.status}`)
+      // Optional secondary validation model
+      if (cleanConfirmModel) {
+        const confirmSystemPrompt = `You are Nexus Verification Engine, a cybernetic validation agent.
+Review the following research summary, takeaways, and score generated by our primary model, and cross-reference them with the original webpage content snippet.
+Determine whether this research summary and relevance score are accurate, and decide whether to APPROVE or DENY/REJECT the search item.
+
+If you approve, return:
+{
+  "approved": true,
+  "reason": "Brief reason for approval"
+}
+
+If you deny/reject (e.g., if the content is irrelevant to the topic, spam, low quality, or the summary/score is incorrect), return:
+{
+  "approved": false,
+  "reason": "Detailed reason for rejection"
+}
+
+Your response MUST be a valid JSON object. Do not include markdown wraps or extra text. Just return raw JSON.`
+
+        const confirmMessages = [
+          { role: 'system', content: confirmSystemPrompt },
+          { role: 'user', content: `Original Webpage Content Snippet:\n${sanitizedContent}\n\nGenerated Summary:\n${parsedResults.summary}\n\nGenerated Takeaways:\n${parsedResults.takeaways?.join('\n')}\n\nGenerated Score: ${parsedResults.score}/10` }
+        ]
+
+        try {
+          const confirmation = await queryLLM({
+            baseUrl: formattedBaseUrl,
+            apiKey: cleanApiKey,
+            model: cleanConfirmModel,
+            messages: confirmMessages,
+            isOllamaNative
+          })
+
+          if (confirmation.approved === false) {
+            // Rejected! Save status as FAILED and prefix justification with rejection details
+            const updatedUrl = await db.watchedUrl.update({
+              where: { id: urlId },
+              data: {
+                title: parsedResults.title || parsedTitle || urlItem.title,
+                summary: parsedResults.summary || 'Summary unavailable.',
+                takeaways: parsedResults.takeaways || [],
+                score: Number(parsedResults.score) || 5,
+                justification: `[REJECTED BY CONFIRMING CORE]: ${confirmation.reason || 'Verification rejected.'}`,
+                publishedDate: parsedResults.publishedDate || null,
+                status: 'FAILED',
+              },
+            })
+            return NextResponse.json(updatedUrl)
+          }
+        } catch (confirmError: any) {
+          console.warn('Confirming model validation failed:', confirmError.message)
+          const updatedUrl = await db.watchedUrl.update({
+            where: { id: urlId },
+            data: {
+              title: parsedResults.title || parsedTitle || urlItem.title,
+              summary: parsedResults.summary || 'Summary unavailable.',
+              takeaways: parsedResults.takeaways || [],
+              score: Number(parsedResults.score) || 5,
+              justification: `[CONFIRMING ERROR]: Validation failed to run (${confirmError.message})`,
+              publishedDate: parsedResults.publishedDate || null,
+              status: 'FAILED',
+            },
+          })
+          return NextResponse.json(updatedUrl)
+        }
       }
-
-      const llmData = await llmResponse.json()
-      let rawJsonText = ''
-
-      if (isOllamaNative) {
-        rawJsonText = llmData.message?.content?.trim() || ''
-      } else {
-        rawJsonText = llmData.choices?.[0]?.message?.content?.trim() || ''
-      }
-
-      // Clean up markdown wrapper blocks if returned by the LLM
-      if (rawJsonText.startsWith('```json')) {
-        rawJsonText = rawJsonText.replace(/^```json/, '').replace(/```$/, '').trim()
-      } else if (rawJsonText.startsWith('```')) {
-        rawJsonText = rawJsonText.replace(/^```/, '').replace(/```$/, '').trim()
-      }
-
-      const parsedResults = JSON.parse(rawJsonText)
 
       // 4. Update WatchedUrl in database with results and status: COMPLETED
       const updatedUrl = await db.watchedUrl.update({
