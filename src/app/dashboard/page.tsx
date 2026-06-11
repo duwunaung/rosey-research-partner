@@ -1664,7 +1664,7 @@ export default function DashboardPage() {
       <footer className="w-full px-6 py-3 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-1.5 z-10 text-[10px] text-slate-500 font-mono bg-[#050508]/50">
         <span>&copy; 2026 Nexus Research Partner</span>
         <div className="flex gap-3 text-slate-600">
-          <span>v1.5.1</span>
+          <span>v1.5.2</span>
           <span>&middot;</span>
           <span>MIT License</span>
         </div>
@@ -1952,7 +1952,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div style={{ borderBottom: '2px solid rgba(99,102,241,0.5)', paddingBottom: '20px', marginBottom: '25px' }}>
             <div style={{ float: 'right', fontSize: '12px', fontFamily: 'monospace', color: '#06b6d4' }}>
-              NEXUS DIGEST ENGINE v1.5.1
+              NEXUS DIGEST ENGINE v1.5.2
             </div>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', letterSpacing: '0.05em', color: '#fff' }}>
               RESEARCH SYNTHESIS DIGEST
