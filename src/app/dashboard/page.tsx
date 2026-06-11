@@ -802,7 +802,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/5 bg-white/2 text-[10px] font-mono text-slate-400">
             <span className="w-1.5 h-1.5 rounded-full bg-cyber-emerald animate-pulse" />
-            OPERATOR: <span className="text-white font-bold">{username}</span>
+            RESEARCHER: <span className="text-white font-bold">{username}</span>
           </div>
 
           <button
@@ -999,9 +999,19 @@ export default function DashboardPage() {
                   <button
                     disabled={loadingSuggestions || researching}
                     onClick={handleSuggestSources}
-                    className="text-[10px] font-mono text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
+                    className={`text-[10px] font-mono hover:underline flex items-center gap-1 cursor-pointer transition ${
+                      loadingSuggestions ? 'text-slate-500 cursor-not-allowed' : 'text-cyber-cyan'
+                    }`}
                   >
-                    <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
+                    {loadingSuggestions ? (
+                      <>
+                        <Loader className="w-3 h-3 animate-spin text-cyber-cyan" /> Suggesting...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 animate-pulse" /> Suggest Sources
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -1048,9 +1058,18 @@ export default function DashboardPage() {
             )}
 
             {/* AI Source Recommendations panel */}
+            {loadingSuggestions && (
+              <div className="mb-4 p-4 rounded-xl glass-panel border-cyber-cyan/35 bg-cyber-cyan/5 animate-pulse flex items-center justify-center gap-3">
+                <Loader className="w-4 h-4 animate-spin text-cyber-cyan" />
+                <span className="text-[10px] font-mono text-cyber-cyan uppercase tracking-wider">
+                  ENGAGING COGNITIVE CORE: LOADING RECOMMENDATIONS...
+                </span>
+              </div>
+            )}
+
             {(() => {
               const visibleSuggestions = suggestions.filter(s => !urls.some(u => u.url === s.url))
-              return visibleSuggestions.length > 0 && (
+              return !loadingSuggestions && visibleSuggestions.length > 0 && (
                 <div className="mb-4 p-3 rounded-xl glass-panel border-cyber-indigo/30 bg-cyber-indigo/5 animate-cyber-glow">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] font-mono text-cyber-indigo uppercase tracking-wider flex items-center gap-1">
