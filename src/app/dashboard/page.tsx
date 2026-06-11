@@ -93,6 +93,14 @@ const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
   }
 }
 
+const PROVIDER_MODELS: Record<string, string[]> = {
+  ollama_local: ['llama3.1:8b', 'llama3.1:70b', 'llama3.2:3b', 'llama3:8b', 'mistral:7b', 'phi3', 'gemma2:9b'],
+  ollama_cloud: ['gemma3:27b-cloud', 'llama3.1:70b', 'llama3.1:8b', 'gemma2:9b'],
+  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+  openrouter: ['meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5', 'anthropic/claude-3.5-sonnet'],
+  custom: []
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const terminalEndRef = useRef<HTMLDivElement>(null)
@@ -130,6 +138,7 @@ export default function DashboardPage() {
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('llama3.1')
+  const [allConfigs, setAllConfigs] = useState<Record<string, { baseUrl: string, apiKey: string, model: string }>>({})
 
   // Robotic Research Execution State
   const [researching, setResearching] = useState(false)
@@ -157,11 +166,24 @@ export default function DashboardPage() {
           setApiKey(data.apiKey || '')
           setModel(data.model || '')
           
+          let parsedConfigs = {}
+          if (data.llmConfigs) {
+            try {
+              parsedConfigs = JSON.parse(data.llmConfigs)
+              setAllConfigs(parsedConfigs)
+            } catch (e) {
+              console.error('Failed to parse llmConfigs:', e)
+            }
+          }
+          
           // Cache in localStorage
           localStorage.setItem('nexus_provider', data.provider)
           localStorage.setItem('nexus_baseUrl', data.baseUrl || '')
           localStorage.setItem('nexus_apiKey', data.apiKey || '')
           localStorage.setItem('nexus_model', data.model || '')
+          if (data.llmConfigs) {
+            localStorage.setItem('nexus_all_configs', data.llmConfigs)
+          }
           return
         }
       }
@@ -174,11 +196,38 @@ export default function DashboardPage() {
     const savedBaseUrl = localStorage.getItem('nexus_baseUrl') || localStorage.getItem('rosey_baseUrl')
     const savedApiKey = localStorage.getItem('nexus_apiKey') || localStorage.getItem('rosey_apiKey')
     const savedModel = localStorage.getItem('nexus_model') || localStorage.getItem('rosey_model')
+    const savedAllConfigs = localStorage.getItem('nexus_all_configs')
     
     setProvider(savedProvider)
     setBaseUrl(savedBaseUrl || PROVIDER_PRESETS[savedProvider]?.baseUrl || '')
     setApiKey(savedApiKey || '')
     setModel(savedModel || PROVIDER_PRESETS[savedProvider]?.model || '')
+    
+    if (savedAllConfigs) {
+      try {
+        setAllConfigs(JSON.parse(savedAllConfigs))
+      } catch (e) {}
+    }
+  }
+
+  const handleProviderChange = (newProvider: string) => {
+    // 1. Save current form values of the previous provider to our local map
+    const updatedConfigs = {
+      ...allConfigs,
+      [provider]: { baseUrl, apiKey, model }
+    }
+    setAllConfigs(updatedConfigs)
+    localStorage.setItem('nexus_all_configs', JSON.stringify(updatedConfigs))
+
+    // 2. Load settings for the new provider
+    const nextConfig = updatedConfigs[newProvider] || PROVIDER_PRESETS[newProvider]
+    setProvider(newProvider)
+    setBaseUrl(nextConfig.baseUrl || '')
+    setApiKey(nextConfig.apiKey || '')
+    
+    // Set model from nextConfig, fallback to presets
+    const nextModel = nextConfig.model || PROVIDER_PRESETS[newProvider]?.model || ''
+    setModel(nextModel)
   }
 
   useEffect(() => {
@@ -194,11 +243,20 @@ export default function DashboardPage() {
   }, [terminalLogs])
 
   const saveConfig = async () => {
+    // Update local state map with current inputs
+    const updatedConfigs = {
+      ...allConfigs,
+      [provider]: { baseUrl, apiKey, model }
+    }
+    setAllConfigs(updatedConfigs)
+    
     // Cache locally first for instant UI response
     localStorage.setItem('nexus_provider', provider)
     localStorage.setItem('nexus_baseUrl', baseUrl)
     localStorage.setItem('nexus_apiKey', apiKey)
     localStorage.setItem('nexus_model', model)
+    localStorage.setItem('nexus_all_configs', JSON.stringify(updatedConfigs))
+    
     setIsSettingsOpen(false)
     addLog(`[SYSTEM] LLM settings saved: [${PROVIDER_PRESETS[provider]?.name || provider}] ${model}`)
 
@@ -207,10 +265,16 @@ export default function DashboardPage() {
       const res = await fetch('/api/user/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, baseUrl, apiKey, model }),
+        body: JSON.stringify({ 
+          provider, 
+          baseUrl, 
+          apiKey, 
+          model,
+          llmConfigs: JSON.stringify(updatedConfigs)
+        }),
       })
       if (res.ok) {
-        addLog(`[SYSTEM] LLM configuration synchronized with database profile.`)
+        addLog(`[SYSTEM] LLM configurations synchronized with database profile.`)
       } else {
         const errData = await res.json()
         addLog(`[WARNING] Database settings sync failed: ${errData.error || 'Server error'}`)
@@ -1217,14 +1281,7 @@ export default function DashboardPage() {
                   <label className="text-xs font-mono uppercase tracking-widest text-slate-400">API Provider</label>
                   <select
                     value={provider}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setProvider(val)
-                      if (val !== 'custom') {
-                        setBaseUrl(PROVIDER_PRESETS[val].baseUrl)
-                        setModel(PROVIDER_PRESETS[val].model)
-                      }
-                    }}
+                    onChange={(e) => handleProviderChange(e.target.value)}
                     className="w-full px-4 py-2.5 glass-input text-sm bg-cyber-dark text-slate-200 border border-white/10 rounded-lg focus:outline-none focus:border-cyber-cyan cursor-pointer"
                   >
                     {Object.entries(PROVIDER_PRESETS).map(([key, p]) => (
@@ -1267,13 +1324,52 @@ export default function DashboardPage() {
 
                 <div className="space-y-1">
                   <label className="text-xs font-mono uppercase tracking-widest text-slate-400">LLM Model Name</label>
-                  <input
-                    type="text"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="e.g. llama3.1"
-                    className="w-full px-4 py-2.5 glass-input text-sm"
-                  />
+                  {(() => {
+                    const presets = PROVIDER_MODELS[provider] || []
+                    const isCustomModel = presets.length === 0 || !presets.includes(model)
+                    return presets.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={isCustomModel ? 'custom' : model}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            if (val === 'custom') {
+                              setModel('')
+                            } else {
+                              setModel(val)
+                            }
+                          }}
+                          className="w-full px-4 py-2.5 glass-input text-sm bg-cyber-dark text-slate-200 border border-white/10 rounded-lg focus:outline-none focus:border-cyber-cyan cursor-pointer"
+                        >
+                          {presets.map((m) => (
+                            <option key={m} value={m} className="bg-[#0f0f15] text-slate-200">
+                              {m}
+                            </option>
+                          ))}
+                          <option value="custom" className="bg-[#0f0f15] text-slate-200">
+                            Custom model name...
+                          </option>
+                        </select>
+                        {isCustomModel && (
+                          <input
+                            type="text"
+                            value={model}
+                            onChange={(e) => setModel(e.target.value)}
+                            placeholder="Enter custom model name"
+                            className="w-full px-4 py-2.5 glass-input text-sm"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        placeholder="e.g. llama3.1"
+                        className="w-full px-4 py-2.5 glass-input text-sm"
+                      />
+                    )
+                  })()}
                   <p className="text-[10px] text-slate-500 font-mono">
                     {PROVIDER_PRESETS[provider]?.helpText || 'Verify the model is deployed on the instance.'}
                   </p>
